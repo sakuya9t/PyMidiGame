@@ -5,8 +5,7 @@ from config.Config import Config
 from InputQueue import InputMidiQueue, InputUIEventQueue, InputKeyboardEventQueue
 from constants import UI_CONSTANT, CONTROL_FLAGS, STORE_KEYS, CONFIG_KEYS
 from window import window_control, window_painter
-from KeyCodeConstants import keyboardMapping
-
+from KeyCodeConstants import get_key_code
 
 config = Config('config/config.json')
 key_name = config.get(CONFIG_KEYS.MIDI_KEY)
@@ -35,7 +34,7 @@ class game_controller:
 
     def init_store(self):
         configed_key_map = config.get(CONFIG_KEYS.MIDI_MAPPING)
-        key_map = [[key, pygame.key.name(keyboardMapping[value])] for key, value in configed_key_map.items()]
+        key_map = [[key, pygame.key.name(get_key_code(value))] for key, value in configed_key_map.items()]
         self.store.put(STORE_KEYS.MIDI_INPUT_INDICATOR, UI_CONSTANT.MESSAGE_WAIT_FOR_MIDI_INPUT)
         self.store.put(STORE_KEYS.MIDI_KEY_MAP, [['MIDI Key', 'Keyboard Key']])
         self.store.get(STORE_KEYS.MIDI_KEY_MAP).extend(key_map)
