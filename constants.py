@@ -21,9 +21,12 @@ class CONTROL_FLAGS:
 class STORE_KEYS:
     MIDI_INPUT_INDICATOR = 'midi_input_indicator'
     MIDI_KEY_MAP = 'key_maps'
+    MIDI_DEVICES = 'midi_devices'
     CONFIGURING_KEY_MAP = 'configuring_key_map'
 
 
 class CONFIG_KEYS:
     MIDI_MAPPING = 'mapping'
     MIDI_KEY = 'midi-key'
+    MIDI_DEVICE = 'midi-device'
+    MIDI_DEVICE_ID = MIDI_DEVICE + '/device-id'

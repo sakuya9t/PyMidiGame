@@ -1,9 +1,11 @@
 import pygame
 from pygame import midi as pygame_midi
 
+from MidiControl import MidiControl
 from config.Config import Config
 from InputQueue import InputMidiQueue, InputUIEventQueue, InputKeyboardEventQueue
 from constants import UI_CONSTANT, CONTROL_FLAGS, STORE_KEYS, CONFIG_KEYS
+from settings.MidiDeviceSettings import MidiDeviceSettings
 from window import window_control, window_painter
 from KeyCodeConstants import get_key_code
 
@@ -23,6 +25,7 @@ class game_controller:
         self.control_flags = {}
         self.init_control_flags()
         self.config = config
+        self.midi_device_settings = MidiDeviceSettings()
 
     def start(self):
         pygame.font.init()
@@ -39,6 +42,7 @@ class game_controller:
         self.store.put(STORE_KEYS.MIDI_KEY_MAP, [['MIDI Key', 'Keyboard Key']])
         self.store.get(STORE_KEYS.MIDI_KEY_MAP).extend(key_map)
         self.store.put(STORE_KEYS.CONFIGURING_KEY_MAP, True)
+        self.store.put(STORE_KEYS.MIDI_DEVICES, MidiControl.get_input_midi_devices())
 
     def init_control_flags(self):
         self.control_flags[CONTROL_FLAGS.WAITING_FOR_MIDI_INPUT] = False
@@ -63,17 +67,21 @@ class Store:
 
 
 class input_controller:
-    def __init__(self, game_ctrl, midi_input, device_id):
-        self.input_midi_queue = InputMidiQueue(game_ctrl, midi_input, device_id)
+    def __init__(self, game_ctrl):
+        self.midi_input = game_ctrl.midi_device_settings.midi_input
+        device_id = game_ctrl.config.get(CONFIG_KEYS.MIDI_DEVICE_ID)
+        self.input_midi_queue = InputMidiQueue(game_ctrl, self.midi_input, device_id)
         self.input_ui_queue = InputUIEventQueue(game_ctrl)
         self.input_keyboard_queue = InputKeyboardEventQueue(game_ctrl)
 
     def start(self):
-        self.input_midi_queue.start()
+        if self.midi_input is not None:
+            self.input_midi_queue.start()
         self.input_ui_queue.start()
         self.input_keyboard_queue.start()
 
     def close(self):
-        self.input_midi_queue.quit()
+        if self.input_midi_queue.is_alive():
+            self.input_midi_queue.quit()
         self.input_ui_queue.quit()
         self.input_keyboard_queue.quit()

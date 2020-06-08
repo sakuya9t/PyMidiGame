@@ -1,5 +1,4 @@
 import threading
-import json
 from queue import Queue
 
 import pygame
@@ -47,6 +46,13 @@ class InputMidiQueue(InputQueue):
                 self.display_controller.refresh()
             self.key_mapper.map_midi(events)
         self.midi_input.close()
+
+    def swtich_input(self, midi_input, midi_device_id):
+        if self.is_alive():
+            self.quit()
+        self.midi_input = midi_input
+        self.midi_device = midi_device_id
+        self.start()
 
 
 class InputUIEventQueue(InputQueue):
