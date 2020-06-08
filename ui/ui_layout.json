@@ -1,0 +1,112 @@
+{
+  "mainframe": {
+    "type": "panel",
+    "left": 30,
+    "top": 30,
+    "width": 740,
+    "height": 540,
+    "z-index": 1,
+    "children": [
+      {
+        "type": "label",
+        "left": 0,
+        "top": 60,
+        "width": 200,
+        "height": 20,
+        "text": "Midi Input Device"
+      },
+      {
+        "type": "dropdown",
+        "left": 250,
+        "top": 60,
+        "width": 400,
+        "height": 20,
+        "options": "$midi_devices",
+        "default": 0,
+        "id": "midi_devices_dropdown"
+      },
+      {
+        "type": "label",
+        "left": 0,
+        "top": 100,
+        "width": 200,
+        "height": 20,
+        "text": "Midi Key Mapping"
+      },
+      {
+        "type": "panel",
+        "left": 100,
+        "top": 170,
+        "width": 600,
+        "height": 250,
+        "z-index": 2,
+        "children": [
+          {
+            "type": "scrollable-container",
+            "left": 0,
+            "top": 0,
+            "width": 595,
+            "height": 500,
+            "children": [
+              {
+                "type": "table",
+                "left": 0,
+                "top": 0,
+                "width": 500,
+                "height": 500,
+                "line-height": 20,
+                "column-width": 250,
+                "children": "$key_maps"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "button",
+        "left": 100,
+        "top": 400,
+        "width": 150,
+        "height": 30,
+        "text": "Map MIDI key",
+        "id": "make_map_btn"
+      },
+      {
+        "type": "button",
+        "left": 450,
+        "top": 450,
+        "width": 100,
+        "height": 30,
+        "text": "OK",
+        "id": "ok_btn"
+      },
+      {
+        "type": "button",
+        "left": 570,
+        "top": 450,
+        "width": 100,
+        "height": 30,
+        "text": "Cancel",
+        "id": "cancel_btn"
+      }
+    ]
+  },
+  "keymap_dialog": {
+    "type": "panel",
+    "left": 150,
+    "top": 220,
+    "width": 500,
+    "height": 100,
+    "z-index": 4,
+    "children": [
+      {
+        "type": "label",
+        "left": 0,
+        "top": 25,
+        "width": 500,
+        "height": 20,
+        "text": "$midi_input_indicator"
+      }
+    ]
+  }
+}
