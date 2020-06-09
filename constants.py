@@ -31,3 +31,20 @@ class CONFIG_KEYS:
     MIDI_KEY = 'midi-key'
     MIDI_DEVICE = 'midi-device'
     MIDI_DEVICE_ID = MIDI_DEVICE + '/device-id'
+
+
+class COLORS:
+    RED = (255, 0, 0)
+    GREEN = (0, 255, 0)
+    BLUE = (0, 0, 255)
+    DARK_BLUE = (0, 0, 128)
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
+    PINK = (237, 73, 179)
+    GRAY_25 = (64, 64, 64)
+    GRAY_50 = (128, 128, 128)
+
+
+class SCENE_PARAMETER:
+    TIMESTAMP = 'timestamp'
+    START_TIMESTAMP = 'start_timestamp'

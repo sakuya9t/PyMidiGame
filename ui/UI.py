@@ -12,9 +12,4 @@ class UI:
         self.controller = ui_control
 
     def render(self):
-        ConfigBox(ui=self, should_render=self.store.get(STORE_KEYS.CONFIGURING_KEY_MAP)).render()
-
-
-class GameDisplay(Component):
-    def render(self):
-        pass
+        ConfigBox(ui=self, should_render=(lambda: self.store.get(STORE_KEYS.CONFIGURING_KEY_MAP))).render()

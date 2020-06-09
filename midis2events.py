@@ -5,7 +5,7 @@ import pygame
 
 # Incomplete listing:
 from constants import EVENT_KEY_UP, EVENT_KEY_DOWN
-from KeyMapper import get_key_name
+from KeyMapper import get_midi_key_name
 
 NOTE_OFF = "NOTE_OFF"
 NOTE_ON = "NOTE_ON"
@@ -76,6 +76,6 @@ def midis2events(midis, device_id):
 
 
 def simplify_midi_event(event):
-    key_id = get_key_name(event.dict['data1'])
+    key_id = get_midi_key_name(event.dict['data1'])
     velocity = event.dict['data2']
     return {'id': key_id, 'event': EVENT_KEY_DOWN if velocity > 0 else EVENT_KEY_UP}

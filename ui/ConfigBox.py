@@ -8,7 +8,7 @@ from ui.Component import Component
 
 class ConfigBox(Component):
     def render(self):
-        if self.should_render:
+        if self.should_render():
             self.__render__(self.config.get('mainframe'))
             if UI_CONSTANT.KEY_POPUP in self.controller.keys() and self.controller[UI_CONSTANT.KEY_POPUP]:
                 self.__render__(self.config.get('keymap_dialog'))

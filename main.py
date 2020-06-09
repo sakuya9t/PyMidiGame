@@ -1,7 +1,7 @@
 import sys
 import pygame
 
-from PygameControl import GameController
+from controllers.GameController import GameController
 
 game_ctrl = GameController()
 game_ctrl.start()

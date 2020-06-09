@@ -6,7 +6,8 @@ from constants import EVENT_KEY_DOWN, EVENT_KEY_UP, CONFIG_KEYS
 
 pyautogui.PAUSE = 0
 config = Config('config/config.json')
-key_name = config.get(CONFIG_KEYS.MIDI_KEY)
+key_name_map = config.get(CONFIG_KEYS.MIDI_KEY)
+key_code_map = {value: key for key, value in key_name_map.items()}
 
 
 class KeyMapper:
@@ -24,9 +25,21 @@ class KeyMapper:
                 keyUp(self.key_map[key_id])
 
 
-def get_key_name(key_id):
+def get_midi_key_name(key_id):
     if key_id < 0:
         return 'invalid key (<0)'
-    key_rank = key_name[str(key_id % 12)]
+    key_rank = key_name_map[str(key_id % 12)]
     scale = key_id // 12 - 1
     return '{}{}'.format(key_rank, scale)
+
+
+def get_midi_key_code(key_name):
+    if not isinstance(key_name, str):
+        raise Exception('Key name need to be a string.')
+    rank = key_name[0:2] if key_name[1] == '#' else key_name[0:1]
+    scale = int(key_name[len(rank):])
+    return int(key_code_map[rank]) + 12 * (scale + 1)
+
+
+def is_black_key(key_name):
+    return '#' in key_name
