@@ -1,28 +1,15 @@
 import sys
-
 import pygame
-from pygame import midi as pygame_midi
-from rtmidi import midiutil
 
-from MidiControl import MidiControl
-from PygameControl import game_controller, input_controller
+from PygameControl import GameController
 
-game_ctrl = game_controller()
-# midiutil.list_input_ports()
-# device_id = int(input('Select MIDI input port (Control-C to exit):')) + 1
-# midiutil.open_midiinput(device_id)
-
+game_ctrl = GameController()
 game_ctrl.start()
+
+input_controller = game_ctrl.input_controller
 
 painter = game_ctrl.painter
 painter.draw_ui()
-
-device_info = [pygame_midi.get_device_info(i) for i in range(pygame_midi.get_count())]
-print('Please press any key to locate your device.')
-
-input_controller = input_controller(game_ctrl)
-
-input_controller.start()
 
 clock = pygame.time.Clock()
 is_running = True
@@ -42,4 +29,5 @@ while is_running:
 
 input_controller.close()
 pygame.quit()
+game_ctrl.quit()
 sys.exit()

@@ -22,7 +22,7 @@
         "width": 400,
         "height": 20,
         "options": "$midi_devices",
-        "default": 0,
+        "default": "$selected_midi_device",
         "id": "midi_devices_dropdown"
       },
       {
@@ -39,14 +39,14 @@
         "top": 170,
         "width": 600,
         "height": 250,
-        "z-index": 2,
+        "z-index": 1,
         "children": [
           {
             "type": "scrollable-container",
             "left": 0,
             "top": 0,
             "width": 595,
-            "height": 500,
+            "height": 250,
             "children": [
               {
                 "type": "table",

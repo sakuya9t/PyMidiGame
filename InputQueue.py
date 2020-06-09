@@ -64,6 +64,7 @@ class InputUIEventQueue(InputQueue):
         self.painter = game_controller.painter
         self.control_flags = game_controller.control_flags
         self.display_controller = game_controller.display_controller
+        self.logger = game_controller.logger
 
     def run(self):
         while self.running:
@@ -73,22 +74,29 @@ class InputUIEventQueue(InputQueue):
                     object_id = str.split(event.ui_object_id, '.')[-1]
                     if object_id == UI_CONSTANT.ID_OK_BTN:
                         key_map_settings = self.game_controller.store.get(STORE_KEYS.MIDI_KEY_MAP)[1:]
-                        # todo: map back to pyautogui keymap
                         key_map_settings = {x[0]: get_pyautogui_key_name(pygame.key.key_code(x[1])) for x in key_map_settings}
                         self.game_controller.config.set(CONFIG_KEYS.MIDI_MAPPING, key_map_settings)
                         self.game_controller.store.put(STORE_KEYS.CONFIGURING_KEY_MAP, False)
                         self.display_controller.refresh()
+                        self.logger.info('Saving MIDI key mapping to config file.')
+
                     elif object_id == UI_CONSTANT.ID_CANCEL_BTN:
-                        print('cancel clicked')
+                        self.game_controller.store.put(STORE_KEYS.CONFIGURING_KEY_MAP, False)
+                        self.display_controller.refresh()
+
                     elif object_id == UI_CONSTANT.ID_MIDI_MAP_KEY_BTN:
                         self.ui_control[UI_CONSTANT.KEY_POPUP] = True
                         self.display_controller.refresh()
                         self.control_flags[CONTROL_FLAGS.WAITING_FOR_MIDI_INPUT] = True
-                        print('map midi key')
-                    print(event)
+                        
                 elif event.user_type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
-                    print('{} selected {}.'.format(event.ui_object_id, event.text))
-                print(event)
+                    self.logger.info('{} selected {}.'.format(event.ui_object_id, event.text))
+                    device_id = self.game_controller.store.get(STORE_KEYS.MIDI_DEVICES).index(event.text)
+                    self.game_controller.input_controller.set_midi_input(device_id)
+                    self.logger.info('Setting MIDI input to {}'.format(event.text))
+                    self.game_controller.config.set(CONFIG_KEYS.MIDI_DEVICE_ID, device_id)
+                    self.game_controller.store.put(STORE_KEYS.SELECTED_MIDI_DEVICE, device_id)
+                    self.logger.info('Saving MIDI input device setting to config file.')
 
     def accept(self, event):
         self.buffer.put(event)

@@ -23,6 +23,7 @@ class STORE_KEYS:
     MIDI_KEY_MAP = 'key_maps'
     MIDI_DEVICES = 'midi_devices'
     CONFIGURING_KEY_MAP = 'configuring_key_map'
+    SELECTED_MIDI_DEVICE = 'selected_midi_device'
 
 
 class CONFIG_KEYS:

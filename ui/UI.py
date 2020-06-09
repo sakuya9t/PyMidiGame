@@ -1,5 +1,5 @@
 import pygame
-from pygame_gui.elements import UIPanel, UIButton, UILabel, UIDropDownMenu, UIScrollingContainer, UIVerticalScrollBar
+from pygame_gui.elements import UIPanel, UIButton, UILabel, UIDropDownMenu, UIScrollingContainer
 from pygame_gui.windows import UIMessageWindow
 
 from config.Config import Config
@@ -29,15 +29,11 @@ class UI:
             for child in element['children']:
                 self.__render__(child, panel)
         elif ele_type == 'scrollable-container':
+            children_height = sum(x['height'] for x in element['children'])
             container = UIScrollingContainer(relative_rect=__get_rect__(element),
                                              manager=self.manager,
                                              container=parent)
-            scrollbar_left = element['left'] + element['width'] - 20
-            scroll = UIVerticalScrollBar(relative_rect=pygame.Rect(scrollbar_left, 0, 20, 250),
-                                         manager=self.manager,
-                                         visible_percentage=0.5,
-                                         container=container)
-            container.vert_scroll_bar = scroll
+            container.set_scrollable_area_dimensions((element['width'] - 20, children_height))
             for child in element['children']:
                 self.__render__(child, container)
         elif ele_type == 'button':
@@ -54,7 +50,8 @@ class UI:
                     container=parent)
         elif ele_type == 'dropdown':
             options = self.get_changeable_item(element['options'])
-            selected = '' if len(options) == 0 else options[element['default']]
+            default_option = self.get_changeable_item(element['default'])
+            selected = '' if len(options) == 0 else options[default_option]
             UIDropDownMenu(options_list=options,
                            starting_option=selected,
                            relative_rect=__get_rect__(element),
