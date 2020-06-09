@@ -47,7 +47,7 @@ class GameController:
         self.store.put(STORE_KEYS.MIDI_INPUT_INDICATOR, UI_CONSTANT.MESSAGE_WAIT_FOR_MIDI_INPUT)
         self.store.put(STORE_KEYS.MIDI_KEY_MAP, [['MIDI Key', 'Keyboard Key']])
         self.store.get(STORE_KEYS.MIDI_KEY_MAP).extend(key_map)
-        self.store.put(STORE_KEYS.CONFIGURING_KEY_MAP, True)
+        self.store.put(STORE_KEYS.CONFIGURING_KEY_MAP, True)  # whether displaying the config dialog.
         self.store.put(STORE_KEYS.MIDI_DEVICES, [''] + MidiControl.get_input_midi_devices())
         self.store.put(STORE_KEYS.SELECTED_MIDI_DEVICE, self.config.get(CONFIG_KEYS.MIDI_DEVICE_ID))
 

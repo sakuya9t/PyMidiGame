@@ -88,7 +88,7 @@ class InputUIEventQueue(InputQueue):
                         self.ui_control[UI_CONSTANT.KEY_POPUP] = True
                         self.display_controller.refresh()
                         self.control_flags[CONTROL_FLAGS.WAITING_FOR_MIDI_INPUT] = True
-                        
+
                 elif event.user_type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
                     self.logger.info('{} selected {}.'.format(event.ui_object_id, event.text))
                     device_id = self.game_controller.store.get(STORE_KEYS.MIDI_DEVICES).index(event.text)
