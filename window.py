@@ -10,7 +10,7 @@ from ui.UI import UI
 class window_control:
     def __init__(self, ui_control, window_size=(800, 600)):
         self.window_size = window_size
-        self.__screen__ = display.set_mode(self.window_size)
+        self.__screen__ = display.set_mode(self.window_size) # flags=pygame.DOUBLEBUF | pygame.OPENGL
         self.__surface__ = pygame.Surface(self.window_size)
         self.__manager__ = pygame_gui.UIManager(window_size)
         self.ui_control = ui_control
@@ -42,7 +42,6 @@ class window_control:
         if self.__refresh_flag__:
             self.painter.refresh()
             self.__refresh_flag__ = False
-            display.flip()
         try:
             self.__manager__.update(time_delta)
             self.__screen__.blit(self.__surface__, (0, 0))
@@ -62,6 +61,9 @@ class window_painter:
         self.font = font
         self.ui_renderer = UI(self.manager, store, controller.ui_control)
 
+    def clear_screen(self):
+        self.surface.fill((0, 0, 0))
+
     def refresh(self):
         self.draw_ui()
 
@@ -74,7 +76,6 @@ class window_painter:
         text_rect = text.get_rect()
         (text_rect.top, text_rect.left) = pos
         self.screen.blit(text, text_rect)
-        display.flip()
 
     def draw_line(self, pos1, pos2, line_width=1, color=COLORS.WHITE):
         pygame.draw.line(self.surface, color, pos1, pos2, line_width)

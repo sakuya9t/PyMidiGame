@@ -1,3 +1,5 @@
+import time
+
 from pygame import midi as pygame_midi
 
 from InputQueue import InputMidiQueue, InputUIEventQueue, InputKeyboardEventQueue
@@ -14,8 +16,10 @@ class InputController:
         self.input_keyboard_queue = InputKeyboardEventQueue(game_ctrl)
         self.logger = game_ctrl.logger
 
-    def set_midi_input(self, device_id):
+    def set_midi_input(self, device_id, initial):
         old_device_id = self.game_ctrl.store.get(STORE_KEYS.SELECTED_MIDI_DEVICE)
+        if not initial and old_device_id == device_id:
+            return
         try:
             if self.input_midi_queue.is_alive():
                 self.input_midi_queue.quit()
@@ -29,6 +33,7 @@ class InputController:
                 self.input_midi_queue.start()
         except Exception as e:
             self.logger.warning('Invalid midi device. Error: {}'.format(e))
+            time.sleep(50)
             try:
                 self.set_midi_input(old_device_id)
             except Exception:

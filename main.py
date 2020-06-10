@@ -25,9 +25,10 @@ while is_running:
         game_ctrl.process_events(event)
 
     game_ctrl.display_controller.handle_frame(clock.tick(60) / 1000.0)
-    pygame.display.update()
+    pygame.display.flip()
 
 input_controller.close()
 pygame.quit()
 game_ctrl.quit()
 sys.exit()
+

@@ -19,6 +19,7 @@ key_name = config.get(CONFIG_KEYS.MIDI_KEY)
 class GameController(Controller):
     def __init__(self):
         pygame.init()
+        pygame.display.set_caption('Test Midi Application')
         self.config = config
         self.font = None
         self.ui_control = {}
@@ -41,11 +42,11 @@ class GameController(Controller):
         self.display_controller.init(painter=self.painter, store=self.store)
         self.input_controller = InputController(self)
         self.input_controller.start()
-        self.__init_midi_device__()
+        self.__init_midi_device__(initial=True)
 
-    def __init_midi_device__(self):
+    def __init_midi_device__(self, initial):
         device_id = self.store.get(STORE_KEYS.SELECTED_MIDI_DEVICE)
-        self.input_controller.set_midi_input(device_id)
+        self.input_controller.set_midi_input(device_id, initial)
 
     def init_store(self):
         configed_key_map = config.get(CONFIG_KEYS.MIDI_MAPPING)
