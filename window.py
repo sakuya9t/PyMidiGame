@@ -8,11 +8,11 @@ from ui.UI import UI
 
 
 class window_control:
-    def __init__(self, ui_control):
-        self.window_size = (800, 600)
+    def __init__(self, ui_control, window_size=(800, 600)):
+        self.window_size = window_size
         self.__screen__ = display.set_mode(self.window_size)
         self.__surface__ = pygame.Surface(self.window_size)
-        self.__manager__ = pygame_gui.UIManager((800, 600))
+        self.__manager__ = pygame_gui.UIManager(window_size)
         self.ui_control = ui_control
         self.game_display = None
         self.__refresh_flag__ = False

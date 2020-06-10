@@ -1,3 +1,8 @@
+import os
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE_PATH = os.path.join(ROOT_DIR, 'config/config.json')
+
 EVENT_KEY_DOWN = 'EVENT_KEY_DOWN'
 EVENT_KEY_UP = 'EVENT_KEY_UP'
 
