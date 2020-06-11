@@ -4,7 +4,7 @@ from queue import Queue
 import pygame
 import pygame_gui
 
-from KeyCodeConstants import get_pyautogui_key_name
+from KeyCodeConstants import get_pyautogui_key_name, pygame_key_code
 from KeyMapper import KeyMapper
 from constants import UI_CONSTANT, CONTROL_FLAGS, STORE_KEYS, CONFIG_KEYS
 from midis2events import midis2events, simplify_midi_event
@@ -74,7 +74,7 @@ class InputUIEventQueue(InputQueue):
                     object_id = str.split(event.ui_object_id, '.')[-1]
                     if object_id == UI_CONSTANT.ID_OK_BTN:
                         key_map_settings = self.game_controller.store.get(STORE_KEYS.MIDI_KEY_MAP)[1:]
-                        key_map_settings = {x[0]: get_pyautogui_key_name(pygame.key.key_code(x[1])) for x in key_map_settings}
+                        key_map_settings = {x[0]: get_pyautogui_key_name(pygame_key_code(x[1])) for x in key_map_settings}
                         self.game_controller.config.set(CONFIG_KEYS.MIDI_MAPPING, key_map_settings)
                         self.game_controller.store.put(STORE_KEYS.CONFIGURING_KEY_MAP, False)
                         self.display_controller.refresh()

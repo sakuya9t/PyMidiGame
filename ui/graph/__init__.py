@@ -1,10 +1,7 @@
-# coding=utf-8
+import math
 
-# imports the Pygame library
 import pygame as pg
 
-# imports the GL sub-module of the OpenGL module
-# Note: PyOpenGL installation is required
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
@@ -13,6 +10,7 @@ black = (0, 0, 0, 1)
 green = (0, 1, 0)
 white = (1, 1, 1)
 pink = (0.8, 0.6, 0.6)
+grey = (0.5, 0.5, 0.5, 0.5)
 
 
 cubeVertices = ((1,1,1),(1,1,-1),(1,-1,-1),(1,-1,1),(-1,1,1),(-1,-1,-1),(-1,-1,1),(-1,1,-1))
@@ -25,9 +23,6 @@ def draw_square():
     Draws a square.
     """
 
-    # cleans the background
-    glClear(GL_COLOR_BUFFER_BIT)
-
     # sets the color of the square
     glColor3f(*green)
 
@@ -35,7 +30,50 @@ def draw_square():
     # down and right are positive.
     glRectf(-0.3, 0, 0, -0.3)
 
-def wireCube():
+
+def draw_circle(radius, center: (float, float, float), filled=True, side_num=360, color=white):
+    glPushMatrix()
+    x, y, z = center
+    glTranslatef(x, y, z)
+    if filled:
+        glBegin(GL_POLYGON)
+    else:
+        glBegin(GL_LINE_LOOP)
+    glColor(*color)
+    for vertex in range(0, side_num):
+        angle = float(vertex) * 2.0 * math.pi / side_num
+        glVertex3f(math.cos(angle) * radius, math.sin(angle) * radius, 0.0)
+    glEnd()
+    glPopMatrix()
+
+
+def draw_rounded_rectangle(left, top, right, bottom, radius, color=white, filled=True):
+    def draw_rounded_cornet(x, y, sa, arc, r):
+        cent_x = x + r * math.cos(sa + math.pi / 2)
+        cent_y = y + r * math.sin(sa + math.pi / 2)
+        n = math.ceil(90 * arc / math.pi * 2)
+        for i in range(0, n+1):
+            ang = sa + arc * i / n
+            next_x = cent_x + r * math.sin(ang)
+            next_y = cent_y - r * math.cos(ang)
+            glVertex3f(next_x, next_y, 0.0)
+    if left > right:
+        left, right = right, left
+    if top > bottom:
+        top, bottom = bottom, top
+    if filled:
+        glBegin(GL_POLYGON)
+    else:
+        glBegin(GL_LINE_LOOP)
+    glColor(*color)
+    draw_rounded_cornet(left, top + radius, 3 * math.pi / 2, math.pi / 2, radius)  # top-left
+    draw_rounded_cornet(right - radius, top, 0.0, math.pi / 2, radius)  # top-right
+    draw_rounded_cornet(right, bottom - radius, math.pi / 2, math.pi / 2, radius)  # bottom-right
+    draw_rounded_cornet(left + radius, bottom, math.pi, math.pi / 2, radius)  # bottom-left
+    glEnd()
+
+
+def draw_wire_cube():
     glColor3f(*pink)
     glBegin(GL_LINES)
     for cubeEdge in cubeEdges:
@@ -43,7 +81,8 @@ def wireCube():
             glVertex3fv(cubeVertices[cubeVertex])
     glEnd()
 
-def solidCube():
+
+def draw_solid_cube():
     glColor3f(*white)
     glBegin(GL_QUADS)
     for cubeQuad in cubeQuads:
@@ -98,16 +137,17 @@ def main():
         if state == 0:
             deg = (deg + 1) % 360
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-            # solidCube()
+            draw_circle(1, (1, 1, -10), filled=False, color=grey)
+            glPushMatrix()
+            glRotatef(deg, 1, 0, 0)
+            draw_wire_cube()
+            glPopMatrix()
             glPushMatrix()
             glRotatef(deg, 0, 1, 0)
             glTranslatef(0.15, 0.15, 0)
             draw_square()
             glPopMatrix()
-            glPushMatrix()
-            glRotatef(deg, 1, 0, 0)
-            wireCube()
-            glPopMatrix()
+            draw_rounded_rectangle(1, 0, -1, 1, 0.2, color=white, filled=False)
         pg.display.flip()
         pg.time.wait(10)
 

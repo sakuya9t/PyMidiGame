@@ -2,7 +2,7 @@ import pygame
 
 from KeyCodeConstants import get_key_code
 from MidiControl import MidiControl
-from PygameControl import InputController
+from controllers.InputController import InputController
 from config.Config import Config
 from constants import CONFIG_KEYS, STORE_KEYS, CONTROL_FLAGS, UI_CONSTANT
 from controllers import Controller

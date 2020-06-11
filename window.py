@@ -47,7 +47,8 @@ class window_control:
             self.__screen__.blit(self.__surface__, (0, 0))
             self.__manager__.draw_ui(self.__screen__)
             self.game_display.render()
-        except:
+        except Exception as e:
+            print(e)
             # handle ui refresh timeout issue
             self.handle_frame(time_delta)
 
@@ -82,4 +83,4 @@ class window_painter:
 
     def draw_rect(self, left, top, width, height, color=COLORS.WHITE):
         rect = pygame.Rect(left, top, width, height)
-        pygame.draw.rect(self.surface, color, rect, border_radius=5)
+        pygame.draw.rect(self.surface, color, rect)
