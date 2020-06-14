@@ -6,8 +6,12 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 # constants
+from KeyMapper import get_midi_key_code
+from midi import Note, MidiInfo
+
 screen_size = (1024, 768)
 key_count = 32
+LOWEST_KEY = 'C3'
 
 # game_board_specs
 game_board_left = -3
@@ -150,35 +154,68 @@ def draw_key_bars():
     glLineWidth(1)  # reset line width
 
 
-def draw_note(lane: int, note_length: int):
+def draw_note(note: Note):
+    note_length = note.duration
+    note_position = note.start
+    lane = get_midi_key_code(note.note_name) - get_midi_key_code(LOWEST_KEY)
     track_width = game_board_width / key_count
-    scale = (track_width, 0.3, 0.2)  # what does 1 means in each direction
-    offset = (game_board_left + lane * track_width, 0, 0)
-    vertices = [(0, 0, 0.3), (0, 0, note_length - 0.3), (0.2, 0, 0), (0.2, 0.2, 0.3), (0.2, 0.2, note_length - 0.3),
-                (0.2, 0, note_length), (0.8, 0, 0), (0.8, 0.2, 0.3), (0.8, 0.2, note_length - 0.3),
-                (0.8, 0, note_length), (1, 0, 0.3), (1, 0, note_length - 0.3)]
-    vertices = [(v[0] * scale[0] + offset[0], v[1] * scale[1] + offset[1], v[2] * scale[2] + offset[2])
+    note_length = min(note_length, note_position + note_length + game_board_after_key_height)
+    if note_length < 0:
+        return
+    offset_before_scale = (0, 0, -note_length)  # set note position according to their bottom (closest to player)
+    scale = (track_width, 0.2, 0.2)  # what does 1 means in each direction
+    note_position = max(note_position, -1)
+    offset = (game_board_left + lane * track_width,
+              0,
+              game_board_bottom - game_board_after_key_height - note_position)
+    slope_in = min(note_length, 0.3)
+    slope_out = max(0.0, note_length - 0.3)
+    vertices = [(0, 0, slope_in), (0, 0, slope_out), (0.2, 0, 0), (0.2, 0.2, slope_in),
+                (0.2, 0.2, slope_out), (0.2, 0, note_length), (0.8, 0, 0), (0.8, 0.2, slope_in),
+                (0.8, 0.2, slope_out), (0.8, 0, note_length), (1, 0, slope_in), (1, 0, slope_out)]
+    vertices = [((v[0] + offset_before_scale[0]) * scale[0] + offset[0],
+                 (v[1] + offset_before_scale[1]) * scale[1] + offset[1],
+                 (v[2] + offset_before_scale[2]) * scale[2] + offset[2])
                 for v in vertices]
     edges = [(0, 1), (0, 2), (0, 3), (1, 4), (1, 5), (2, 3), (3, 4), (4, 5),
              (2, 6), (3, 7), (4, 8), (5, 9), (6, 7), (7, 8), (8, 9), (6, 10),
              (7, 10), (8, 11), (9, 11), (10, 11)]
-    squares = [(0, 1, 4, 3), (2, 3, 7, 6), (3, 4, 8, 7), (4, 5, 9, 8), (7, 8, 11, 10)]
-    triangles = [(0, 2, 3), (1, 4, 5), (6, 7, 10), (8, 9, 11)]
-    glColor(*pink)
+    dark_pink = (0.4, 0.3, 0.3, 0.5)
+    lighter_pink = (0.5, 0.4, 0.4, 0.5)
+    slight_darker_pink = (0.375, 0.275, 0.275, 0.5)
+    darker_pink = (0.35, 0.25, 0.25, 0.5)
+    squares = [{'v': (0, 1, 4, 3), 'color': dark_pink},  # left
+               {'v': (2, 3, 7, 6), 'color': slight_darker_pink},  # back
+               {'v': (3, 4, 8, 7), 'color': lighter_pink},  # top
+               {'v': (4, 5, 9, 8), 'color': slight_darker_pink},  # front
+               {'v': (7, 8, 11, 10), 'color': dark_pink}]  # right
+    triangles = [{'v': (0, 2, 3), 'color': dark_pink},  # top left
+                 {'v': (1, 4, 5), 'color': darker_pink},  # bottom left
+                 {'v': (6, 7, 10), 'color': dark_pink},  # top right
+                 {'v': (8, 9, 11), 'color': darker_pink}]  # bottom right
     glPushMatrix()
-    materialColor = (1, 0, 0, 0)
+    materialColor = (1, 1, 1, 0)
     glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, materialColor)
     glBegin(GL_QUADS)
     for quad in squares:
-        for cubeVertex in quad:
+        glColor(*quad['color'])
+        for cubeVertex in quad['v']:
             glVertex3fv(vertices[cubeVertex])
     glEnd()
     glBegin(GL_TRIANGLES)
     for tri in triangles:
-        for cubeVertex in tri:
+        glColor(*tri['color'])
+        for cubeVertex in tri['v']:
             glVertex3fv(vertices[cubeVertex])
     glEnd()
     glPopMatrix()
+
+
+def draw_notes(notes, offset):
+    notes = [x for x in notes if offset <= x.start <= game_board_before_key_height - offset]
+    for note in notes:
+        n = Note(note.start + offset, note.duration, note.note_name)
+        draw_note(n)
 
 
 def resize(width, height):
@@ -209,7 +246,11 @@ def main():
     pg.init()
     state = 0
     deg = 0
+    note_offset = 0
     pg.display.set_mode(screen_size, pg.DOUBLEBUF | pg.OPENGL)
+    midi_info = MidiInfo('../../resources/平和な日々.mid')
+    notes = midi_info.to_note_list()
+    print(len(notes))
     init()
 
     while True:
@@ -231,11 +272,11 @@ def main():
         if state == 0:
             glPushMatrix()
             glTranslatef(0, 0, 4)
-            glLight(GL_LIGHT0, GL_POSITION, (0, 2, 1, 1))
+            glLight(GL_LIGHT0, GL_POSITION, (0, 2, 1, 2))
             glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.6, 0.6, 0.6, 1))
-            glLightfv(GL_LIGHT0, GL_AMBIENT, (1, 1, 1, 1))
+            glLightfv(GL_LIGHT0, GL_AMBIENT, (1, 1, 1, 0.5))
             glPopMatrix()
-
+            note_offset -= 0.05
             deg = (deg + 1) % 360
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             # draw game board
@@ -243,9 +284,7 @@ def main():
             glTranslatef(0, 0.8, 0)
             glRotatef(30, 1, 0, 0)
             draw_game_outer_surface()
-            draw_note(0, note_length=1)
-            draw_note(7, note_length=2)
-            draw_note(30, note_length=5)
+            draw_notes(notes, note_offset)
             glPopMatrix()
             # draw game board end
             glPushMatrix()
