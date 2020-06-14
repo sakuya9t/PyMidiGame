@@ -14,6 +14,8 @@ from window import window_control, window_painter
 
 config = Config('config/config.json')
 key_name = config.get(CONFIG_KEYS.MIDI_KEY)
+clock = pygame.time.Clock()
+SWITCH_DISPLAY_EVENT = pygame.USEREVENT + 1
 
 
 class GameController(Controller):
@@ -63,8 +65,23 @@ class GameController(Controller):
         self.control_flags[CONTROL_FLAGS.WAITING_FOR_KEYBOARD_INPUT] = False
 
     def process_events(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == 32:  # currently press space will switch display.
+                pygame.event.post(pygame.event.Event(SWITCH_DISPLAY_EVENT, {}))  # template of switching display event
+            self.input_controller.input_keyboard_queue.accept(event)
+        elif event.type == pygame.USEREVENT:
+            self.input_controller.input_ui_queue.accept(event)
+        elif event.type == SWITCH_DISPLAY_EVENT:
+            self.switch_display()
         manager = self.display_controller.get_manager()
         manager.process_events(event)
 
+    def switch_display(self):
+        self.display_controller.switch_display()
+
+    def handle_frame(self):
+        self.display_controller.handle_frame(clock.tick(60) / 1000.0)
+
     def quit(self):
+        self.input_controller.close()
         self.logger.exit()

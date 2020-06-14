@@ -1,16 +1,18 @@
+import time
+
 import pygame
 import pygame_gui
 from pygame import display
 
-from constants import STORE_KEYS, COLORS
+from constants import STORE_KEYS, COLORS, UI_CONSTANT
 from ui.GameDisplay import GameDisplay
 from ui.UI import UI
 
 
 class window_control:
-    def __init__(self, ui_control, window_size=(800, 600)):
+    def __init__(self, ui_control, window_size=UI_CONSTANT.SCREEN_SIZE):
         self.window_size = window_size
-        self.__screen__ = display.set_mode(self.window_size) # flags=pygame.DOUBLEBUF | pygame.OPENGL
+        self.__screen__ = display.set_mode(self.window_size)
         self.__surface__ = pygame.Surface(self.window_size)
         self.__manager__ = pygame_gui.UIManager(window_size)
         self.ui_control = ui_control
@@ -18,13 +20,20 @@ class window_control:
         self.__refresh_flag__ = False
         self.painter = None
         self.store = None
-        display.flip()
+        self.is_3d_scene = False
 
     def init(self, painter, store):
         self.painter = painter
         self.store = store
         self.game_display = GameDisplay(painter=self.painter,
                                         should_render=(lambda: not self.store.get(STORE_KEYS.CONFIGURING_KEY_MAP)))
+
+    def switch_display(self):
+        self.is_3d_scene = not self.is_3d_scene
+        if self.is_3d_scene:
+            pygame.display.set_mode(self.window_size, pygame.DOUBLEBUF | pygame.OPENGL)
+        else:
+            pygame.display.set_mode(self.window_size, 0)
 
     def get_screen(self):
         return self.__screen__
@@ -39,6 +48,9 @@ class window_control:
         self.__refresh_flag__ = True
 
     def handle_frame(self, time_delta):
+        if self.is_3d_scene:
+            pygame.display.flip()
+            return
         if self.__refresh_flag__:
             self.painter.refresh()
             self.__refresh_flag__ = False
@@ -47,6 +59,7 @@ class window_control:
             self.__screen__.blit(self.__surface__, (0, 0))
             self.__manager__.draw_ui(self.__screen__)
             self.game_display.render()
+            pygame.display.flip()
         except Exception as e:
             print(e)
             # handle ui refresh timeout issue

@@ -8,6 +8,7 @@ EVENT_KEY_UP = 'EVENT_KEY_UP'
 
 
 class UI_CONSTANT:
+    SCREEN_SIZE = (1024, 768)
     ID_OK_BTN = 'ok_btn'
     ID_CANCEL_BTN = 'cancel_btn'
     ID_MIDI_DEVICES_DROPDOWN = 'midi_devices_dropdown'

@@ -99,4 +99,6 @@ class ConfigBox(Component):
 
 
 def __get_rect__(element):
-    return pygame.Rect(element['left'], element['top'], element['width'], element['height'])
+    scale = UI_CONSTANT.SCREEN_SIZE[0] / 800
+    return pygame.Rect(element['left'] * scale, element['top'] * scale,
+                       element['width'] * scale, element['height'] * scale)

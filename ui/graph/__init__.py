@@ -1,4 +1,5 @@
 import math
+from datetime import datetime
 
 import pygame as pg
 
@@ -7,9 +8,9 @@ from OpenGL.GLU import *
 
 # constants
 from KeyMapper import get_midi_key_code
+from constants import UI_CONSTANT
 from midi import Note, MidiInfo
 
-screen_size = (1024, 768)
 key_count = 32
 LOWEST_KEY = 'C3'
 
@@ -218,6 +219,14 @@ def draw_notes(notes, offset):
         draw_note(n)
 
 
+def draw_text(position: (float, float, float), text: str):
+    font = pg.font.Font(None, 24)
+    text_surface = font.render(text, True, (255, 255, 255, 1), black)
+    text_data = pg.image.tostring(text_surface, "RGBA", True)
+    glRasterPos3d(*position)
+    glDrawPixels(text_surface.get_width(), text_surface.get_height(), GL_RGBA, GL_UNSIGNED_BYTE, text_data)
+
+
 def resize(width, height):
     """
     Updates the viewport when the screen is resized.
@@ -232,7 +241,7 @@ def resize(width, height):
 
 
 def init():
-    display = screen_size
+    display = UI_CONSTANT.SCREEN_SIZE
     gluPerspective(45, (display[0] / display[1]), 0.1, 50.0)
     glTranslatef(0.0, 0.0, -10)
 
@@ -247,7 +256,7 @@ def main():
     state = 0
     deg = 0
     note_offset = 0
-    pg.display.set_mode(screen_size, pg.DOUBLEBUF | pg.OPENGL)
+    pg.display.set_mode(UI_CONSTANT.SCREEN_SIZE, pg.DOUBLEBUF | pg.OPENGL)
     midi_info = MidiInfo('../../resources/平和な日々.mid')
     notes = midi_info.to_note_list()
     print(len(notes))
@@ -260,12 +269,10 @@ def main():
                 quit()
 
             elif event.type == pg.KEYDOWN:
-                pg.display.quit()
-                pg.display.init()
                 if state == 0:
-                    pg.display.set_mode(screen_size, 0)
+                    pg.display.set_mode(UI_CONSTANT.SCREEN_SIZE, 0)
                 else:
-                    pg.display.set_mode(screen_size, pg.DOUBLEBUF | pg.OPENGL)
+                    pg.display.set_mode(UI_CONSTANT.SCREEN_SIZE, pg.DOUBLEBUF | pg.OPENGL)
                     init()
                 state = 1 - state
 
@@ -294,6 +301,10 @@ def main():
             glPopMatrix()
             # draw_rounded_rectangle(1, 0, -1, 1, 0.2, color=white, filled=True)
             # draw_circle(1, (1, 1, -10), filled=False, color=black)
+            glPushMatrix()
+            glTranslatef(-5.3, 3.8, 0)
+            draw_text((0, 0, 0), datetime.now().strftime("%H:%M:%S.%f'")[:-3])
+            glPopMatrix()
         pg.display.flip()
         pg.time.wait(10)
 

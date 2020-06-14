@@ -115,7 +115,7 @@ class InputKeyboardEventQueue(InputQueue):
         while self.running:
             if not self.buffer.empty():
                 event = self.buffer.get()
-                print(pygame.key.name(event.key))
+                print(event.key)
                 if self.control_flags[CONTROL_FLAGS.WAITING_FOR_KEYBOARD_INPUT]:
                     self.control_flags[CONTROL_FLAGS.WAITING_FOR_KEYBOARD_INPUT] = False
                     self.game_controller.store.put(STORE_KEYS.MIDI_INPUT_INDICATOR, UI_CONSTANT.MESSAGE_WAIT_FOR_MIDI_INPUT)
