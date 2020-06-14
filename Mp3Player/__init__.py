@@ -3,7 +3,7 @@ import os
 if os.name == 'nt':
     from .windows import AudioClip as _PlatformSpecificAudioClip
 else:
-    raise Exception("mp3play can't run on your operating system.")
+    raise Exception("Mp3Player can't run on your operating system.")
 
 def load(filename):
     """Return an AudioClip for the given filename."""

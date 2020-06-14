@@ -1,6 +1,5 @@
-import midi.mp3play as mp3play
-
-clip = mp3play.load(r'C:\Users\sakuya\Music\AGA - Wonderful U.mp3')
+import Mp3Player
+clip = Mp3Player.load(r'C:\Users\sakuya\Music\Vicetone - Nevada (Original Mix).mp3')
 
 clip.play()
 
