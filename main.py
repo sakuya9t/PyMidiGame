@@ -5,12 +5,6 @@ from controllers.GameController import GameController
 
 game_ctrl = GameController()
 game_ctrl.start()
-
-input_controller = game_ctrl.input_controller
-
-painter = game_ctrl.painter
-painter.draw_ui()
-
 is_running = True
 
 while is_running:

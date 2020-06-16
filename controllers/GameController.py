@@ -45,6 +45,7 @@ class GameController(Controller):
         self.input_controller = InputController(self)
         self.input_controller.start()
         self.__init_midi_device__(initial=True)
+        self.painter.draw_ui()
 
     def __init_midi_device__(self, initial):
         device_id = self.store.get(STORE_KEYS.SELECTED_MIDI_DEVICE)

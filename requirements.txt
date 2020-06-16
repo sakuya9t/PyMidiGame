@@ -4,7 +4,7 @@ distlib==0.3.0
 filelock==3.0.12
 importlib-metadata==1.6.1
 pipenv==2020.6.2
-pygame==2.0.0.dev10
+pygame==1.9.6
 six==1.15.0
 virtualenv==20.0.21
 virtualenv-clone==0.5.4

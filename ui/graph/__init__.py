@@ -29,11 +29,11 @@ game_board_after_key_height = 1
 black = (0, 0, 0, 0.5)
 green = (0, 1, 0)
 white = (1, 1, 1)
-pink = (0.8, 0.6, 0.6, 0.5)
-grey = (0.5, 0.5, 0.5, 0.5)
-grey_75 = (0.25, 0.25, 0.25, 0.5)
+pink = (0.8, 0.6, 0.6, 1)
+grey = (0.5, 0.5, 0.5, 1)
+grey_75 = (0.25, 0.25, 0.25, 0.75)
 grey_25 = (0.75, 0.75, 0.75, 0.75)
-grey_5 = (0.95, 0.95, 0.95, 0.25)
+grey_5 = (0.95, 0.95, 0.95, 0.75)
 
 
 def draw_square():
@@ -155,22 +155,24 @@ def draw_key_bars():
     glLineWidth(1)  # reset line width
 
 
-def draw_note(note: Note):
-    note_length = note.duration
-    note_position = note.start
+def draw_note(note: Note, speed=1.0):
+    note_length = note.duration * speed
+    note_position = note.start * speed
     lane = get_midi_key_code(note.note_name) - get_midi_key_code(LOWEST_KEY)
     track_width = game_board_width / key_count
-    note_length = min(note_length, note_position + note_length + game_board_after_key_height)
+    note_length = min(note_length,
+                      note_position + note_length + game_board_after_key_height,  # near bound
+                      game_board_before_key_height - note_position)  # far bound
     if note_length < 0:
         return
     offset_before_scale = (0, 0, -note_length)  # set note position according to their bottom (closest to player)
-    scale = (track_width, 0.2, 0.2)  # what does 1 means in each direction
+    scale = (track_width, 0.2, 1)  # what does 1 means in each direction
     note_position = max(note_position, -1)
     offset = (game_board_left + lane * track_width,
               0,
               game_board_bottom - game_board_after_key_height - note_position)
-    slope_in = min(note_length, 0.3)
-    slope_out = max(0.0, note_length - 0.3)
+    slope_in = min(note_length, 0.05)
+    slope_out = max(0.0, note_length - 0.05)
     vertices = [(0, 0, slope_in), (0, 0, slope_out), (0.2, 0, 0), (0.2, 0.2, slope_in),
                 (0.2, 0.2, slope_out), (0.2, 0, note_length), (0.8, 0, 0), (0.8, 0.2, slope_in),
                 (0.8, 0.2, slope_out), (0.8, 0, note_length), (1, 0, slope_in), (1, 0, slope_out)]
@@ -181,10 +183,10 @@ def draw_note(note: Note):
     edges = [(0, 1), (0, 2), (0, 3), (1, 4), (1, 5), (2, 3), (3, 4), (4, 5),
              (2, 6), (3, 7), (4, 8), (5, 9), (6, 7), (7, 8), (8, 9), (6, 10),
              (7, 10), (8, 11), (9, 11), (10, 11)]
-    dark_pink = (0.4, 0.3, 0.3, 0.5)
-    lighter_pink = (0.5, 0.4, 0.4, 0.5)
-    slight_darker_pink = (0.375, 0.275, 0.275, 0.5)
-    darker_pink = (0.35, 0.25, 0.25, 0.5)
+    dark_pink = (0.4, 0.3, 0.3)
+    lighter_pink = (0.5, 0.4, 0.4)
+    slight_darker_pink = (0.375, 0.275, 0.275)
+    darker_pink = (0.35, 0.25, 0.25)
     squares = [{'v': (0, 1, 4, 3), 'color': dark_pink},  # left
                {'v': (2, 3, 7, 6), 'color': slight_darker_pink},  # back
                {'v': (3, 4, 8, 7), 'color': lighter_pink},  # top
@@ -212,16 +214,17 @@ def draw_note(note: Note):
     glPopMatrix()
 
 
-def draw_notes(notes, offset):
-    notes = [x for x in notes if offset <= x.start <= game_board_before_key_height - offset]
+def draw_notes(notes, offset, speed=1):
+    # todo: set speed
+    notes = [x for x in notes if offset <= x.start * speed <= game_board_before_key_height - offset]
     for note in notes:
         n = Note(note.start + offset, note.duration, note.note_name)
-        draw_note(n)
+        draw_note(n, speed)
 
 
 def draw_text(position: (float, float, float), text: str):
     font = pg.font.Font(None, 24)
-    text_surface = font.render(text, True, (255, 255, 255, 1), black)
+    text_surface = font.render(text, True, (255, 255, 255, 1))
     text_data = pg.image.tostring(text_surface, "RGBA", True)
     glRasterPos3d(*position)
     glDrawPixels(text_surface.get_width(), text_surface.get_height(), GL_RGBA, GL_UNSIGNED_BYTE, text_data)
@@ -248,6 +251,8 @@ def init():
     glEnable(GL_LIGHTING)
     glEnable(GL_LIGHT0)
     glEnable(GL_COLOR_MATERIAL)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    glEnable(GL_BLEND)
     glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE)
 
 

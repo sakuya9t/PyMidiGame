@@ -15,6 +15,7 @@ LOWEST_KEY = 'C3'
 HIGHEST_KEY = 'G4'
 
 
+# deprecated as 3d scene introduced.
 class GameStageScene(Scene):
     def __init__(self, painter):
         super(GameStageScene, self).__init__(painter)
