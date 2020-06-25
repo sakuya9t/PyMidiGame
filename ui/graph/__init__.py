@@ -22,8 +22,8 @@ game_board_bottom = 5
 game_board_width = 6
 game_board_height = 20
 
-game_board_before_key_height = 19
-game_board_after_key_height = 1
+game_board_before_key_height = 19.5
+game_board_after_key_height = 0.5
 
 # colors
 black = (0, 0, 0, 0.5)
@@ -34,6 +34,7 @@ grey = (0.5, 0.5, 0.5, 1)
 grey_75 = (0.25, 0.25, 0.25, 0.75)
 grey_25 = (0.75, 0.75, 0.75, 0.75)
 grey_5 = (0.95, 0.95, 0.95, 0.75)
+transparent = (1, 1, 1, 0)
 
 
 def draw_square():
@@ -160,6 +161,7 @@ def draw_note(note: Note, speed=1.0):
     note_position = note.start * speed
     lane = get_midi_key_code(note.note_name) - get_midi_key_code(LOWEST_KEY)
     track_width = game_board_width / key_count
+    # fixme: display issue when note is longer than game board (e.g. when speed=5)
     note_length = min(note_length,
                       note_position + note_length + game_board_after_key_height,  # near bound
                       game_board_before_key_height - note_position)  # far bound
@@ -167,7 +169,7 @@ def draw_note(note: Note, speed=1.0):
         return
     offset_before_scale = (0, 0, -note_length)  # set note position according to their bottom (closest to player)
     scale = (track_width, 0.2, 1)  # what does 1 means in each direction
-    note_position = max(note_position, -1)
+    note_position = max(note_position, -game_board_after_key_height)
     offset = (game_board_left + lane * track_width,
               0,
               game_board_bottom - game_board_after_key_height - note_position)
@@ -197,8 +199,8 @@ def draw_note(note: Note, speed=1.0):
                  {'v': (6, 7, 10), 'color': dark_pink},  # top right
                  {'v': (8, 9, 11), 'color': darker_pink}]  # bottom right
     glPushMatrix()
-    materialColor = (1, 1, 1, 0)
-    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, materialColor)
+    material_color = (1, 1, 1, 0)
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, material_color)
     glBegin(GL_QUADS)
     for quad in squares:
         glColor(*quad['color'])
@@ -214,9 +216,8 @@ def draw_note(note: Note, speed=1.0):
     glPopMatrix()
 
 
-def draw_notes(notes, offset, speed=1):
-    # todo: set speed
-    notes = [x for x in notes if offset <= x.start * speed <= game_board_before_key_height - offset]
+def draw_notes(notes, offset, speed=1.5):
+    notes = [x for x in notes if offset <= x.start * speed <= game_board_before_key_height - speed * offset]
     for note in notes:
         n = Note(note.start + offset, note.duration, note.note_name)
         draw_note(n, speed)
@@ -228,6 +229,23 @@ def draw_text(position: (float, float, float), text: str):
     text_data = pg.image.tostring(text_surface, "RGBA", True)
     glRasterPos3d(*position)
     glDrawPixels(text_surface.get_width(), text_surface.get_height(), GL_RGBA, GL_UNSIGNED_BYTE, text_data)
+
+
+def draw_press_effect(note_name: str):
+    effect_length = 3
+    lane = get_midi_key_code(note_name) - get_midi_key_code(LOWEST_KEY)
+    track_width = game_board_width / key_count
+    points = [(game_board_left + track_width, 0, game_board_bottom - effect_length),
+              (game_board_left, 0, game_board_bottom - effect_length),
+              (game_board_left, 0, game_board_bottom),
+              (game_board_left + track_width, 0, game_board_bottom)]
+    points = [(x[0] + lane * track_width, x[1], x[2]) for x in points]
+    colors = [transparent, transparent, white, white]
+    glBegin(GL_QUADS)
+    for i in range(4):
+        glColor(*colors[i])
+        glVertex3fv(points[i])
+    glEnd()
 
 
 def resize(width, height):
@@ -259,11 +277,11 @@ def init():
 def main():
     pg.init()
     state = 0
-    deg = 0
     note_offset = 0
     pg.display.set_mode(UI_CONSTANT.SCREEN_SIZE, pg.DOUBLEBUF | pg.OPENGL)
     midi_info = MidiInfo('../../resources/平和な日々.mid')
     notes = midi_info.to_note_list()
+    pressed_notes = ['F3', 'D#4']
     print(len(notes))
     init()
 
@@ -289,7 +307,6 @@ def main():
             glLightfv(GL_LIGHT0, GL_AMBIENT, (1, 1, 1, 0.5))
             glPopMatrix()
             note_offset -= 0.05
-            deg = (deg + 1) % 360
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             # draw game board
             glPushMatrix()
@@ -297,15 +314,10 @@ def main():
             glRotatef(30, 1, 0, 0)
             draw_game_outer_surface()
             draw_notes(notes, note_offset)
+            for pressed_note in pressed_notes:
+                draw_press_effect(pressed_note)
             glPopMatrix()
             # draw game board end
-            glPushMatrix()
-            glRotatef(deg, 0, 1, 0)
-            glTranslatef(0.15, 0.15, 0)
-            draw_square()
-            glPopMatrix()
-            # draw_rounded_rectangle(1, 0, -1, 1, 0.2, color=white, filled=True)
-            # draw_circle(1, (1, 1, -10), filled=False, color=black)
             glPushMatrix()
             glTranslatef(-5.3, 3.8, 0)
             draw_text((0, 0, 0), datetime.now().strftime("%H:%M:%S.%f'")[:-3])
