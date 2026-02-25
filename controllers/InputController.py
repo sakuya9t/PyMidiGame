@@ -16,7 +16,7 @@ class InputController:
         self.input_keyboard_queue = InputKeyboardEventQueue(game_ctrl)
         self.logger = game_ctrl.logger
 
-    def set_midi_input(self, device_id, initial):
+    def set_midi_input(self, device_id, initial=False):
         old_device_id = self.game_ctrl.store.get(STORE_KEYS.SELECTED_MIDI_DEVICE)
         if not initial and old_device_id == device_id:
             return
