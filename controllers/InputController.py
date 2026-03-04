@@ -1,6 +1,6 @@
 import time
 
-from pygame import midi as pygame_midi
+import rtmidi
 
 from InputQueue import InputMidiQueue, InputUIEventQueue, InputKeyboardEventQueue
 from constants import STORE_KEYS, CONFIG_KEYS
@@ -26,7 +26,8 @@ class InputController:
             if not device_id:
                 self.midi_input = None
                 return
-            midi_input = pygame_midi.Input(device_id)
+            midi_input = rtmidi.MidiIn()
+            midi_input.open_port(device_id - 1)
             if midi_input is not None:
                 self.midi_input = midi_input
                 self.input_midi_queue = InputMidiQueue(self.game_ctrl, self.midi_input, device_id)

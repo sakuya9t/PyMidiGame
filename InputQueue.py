@@ -7,7 +7,7 @@ import pygame_gui
 from KeyCodeConstants import get_pyautogui_key_name, pygame_key_code
 from KeyMapper import KeyMapper
 from constants import UI_CONSTANT, CONTROL_FLAGS, STORE_KEYS, CONFIG_KEYS
-from midis2events import midis2events, simplify_midi_event
+from midis2events import rtmidi_msg_to_event, simplify_midi_event
 
 
 class InputQueue(threading.Thread):
@@ -32,11 +32,13 @@ class InputMidiQueue(InputQueue):
 
     def run(self):
         while self.running:
-            if not self.midi_input.poll():
+            msg = self.midi_input.get_message()
+            if msg is None:
                 continue
 
-            events = midis2events(self.midi_input.read(40), self.midi_device)
-            events = [simplify_midi_event(e) for e in events]
+            message_bytes, _delta_time = msg
+            event = rtmidi_msg_to_event(message_bytes)
+            events = [simplify_midi_event(event)]
             print(events)
             if CONTROL_FLAGS.WAITING_FOR_MIDI_INPUT in self.control_flags.keys() and self.control_flags[CONTROL_FLAGS.WAITING_FOR_MIDI_INPUT]:
                 self.control_flags[CONTROL_FLAGS.WAITING_FOR_MIDI_INPUT] = False
@@ -45,7 +47,7 @@ class InputMidiQueue(InputQueue):
                 self.game_controller.store.put(STORE_KEYS.MIDI_INPUT_INDICATOR, UI_CONSTANT.MESSAGE_WAIT_FOR_KEYBOARD_INPUT)
                 self.display_controller.refresh()
             self.key_mapper.map_midi(events)
-        self.midi_input.close()
+        self.midi_input.close_port()
 
     def swtich_input(self, midi_input, midi_device_id):
         if self.is_alive():

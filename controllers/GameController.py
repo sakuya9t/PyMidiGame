@@ -8,8 +8,6 @@ from constants import CONFIG_KEYS, STORE_KEYS, CONTROL_FLAGS, UI_CONSTANT
 from controllers import Controller
 from logger import logger
 from settings.MidiDeviceSettings import MidiDeviceSettings
-from pygame import midi as pygame_midi
-
 from window import window_control, window_painter
 
 config = Config('config/config.json')
@@ -37,7 +35,6 @@ class GameController(Controller):
     def start(self):
         pygame.font.init()
         self.font = pygame.font.SysFont(None, 24)
-        pygame_midi.init()
         self.logger.start()
         self.display_controller = window_control(self.ui_control)
         self.painter = window_painter(self.display_controller, self.font, self.store)
