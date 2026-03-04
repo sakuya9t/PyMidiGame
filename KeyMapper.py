@@ -1,10 +1,9 @@
-import pyautogui
-from pyautogui import keyDown, keyUp
+import pygame
 
 from config.Config import Config
 from constants import EVENT_KEY_DOWN, EVENT_KEY_UP, CONFIG_KEYS, CONFIG_FILE_PATH
+from KeyCodeConstants import get_key_code
 
-pyautogui.PAUSE = 0
 config = Config(CONFIG_FILE_PATH)
 key_name_map = config.get(CONFIG_KEYS.MIDI_KEY)
 key_code_map = {value: key for key, value in key_name_map.items()}
@@ -19,10 +18,13 @@ class KeyMapper:
             key_id = midi_event['id']
             if key_id not in self.key_map.keys():
                 continue
+            key_code = get_key_code(self.key_map[key_id])
+            if key_code is None:
+                continue
             if midi_event['event'] == EVENT_KEY_DOWN:
-                keyDown(self.key_map[key_id])
+                pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=key_code, mod=0, unicode='', scancode=0))
             elif midi_event['event'] == EVENT_KEY_UP:
-                keyUp(self.key_map[key_id])
+                pygame.event.post(pygame.event.Event(pygame.KEYUP, key=key_code, mod=0, unicode='', scancode=0))
 
 
 def get_midi_key_name(key_id: int):
