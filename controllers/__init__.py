@@ -1,3 +1,6 @@
+import threading
+
+
 class Controller:
     def __init__(self):
         self.store = Store()
@@ -10,11 +13,12 @@ class Controller:
 class Store:
     def __init__(self):
         self.storage = {}
+        self._lock = threading.Lock()
 
     def get(self, key):
-        if key not in self.storage.keys():
-            return None
-        return self.storage[key]
+        with self._lock:
+            return self.storage.get(key)
 
     def put(self, key, value):
-        self.storage[key] = value
+        with self._lock:
+            self.storage[key] = value
