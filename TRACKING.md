@@ -23,10 +23,10 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 |---|------|--------|
 | 1.1 | Fix `requirements.txt` (add mido, rtmidi, PyOpenGL; remove pygame 1.9.6) | ✅ Done |
 | 1.2 | Remove `pygame.midi`, replace with `python-rtmidi` throughout | ✅ Done |
-| 1.3 | Remove `pyautogui` keyboard simulation; wire MIDI events directly to game loop | ⬜ Todo |
-| 1.4 | Replace `Mp3Player` (Windows-only MCI) with `pygame.mixer` | ⬜ Todo |
-| 1.5 | Delete deprecated `GameStageScene.py` (2D scene); keep OpenGL renderer | ⬜ Todo |
-| 1.6 | Add thread safety (`threading.Lock` or `queue.Queue`) to shared `Store` | ⬜ Todo |
+| 1.3 | Remove `pyautogui` keyboard simulation; wire MIDI events directly to game loop | ✅ Done |
+| 1.4 | Replace `Mp3Player` (Windows-only MCI) with `pygame.mixer` | ✅ Done |
+| 1.5 | Delete deprecated `GameStageScene.py` (2D scene); keep OpenGL renderer | ✅ Done |
+| 1.6 | Add thread safety (`threading.Lock` or `queue.Queue`) to shared `Store` | ✅ Done |
 
 ## Phase 2 — Game Engine
 
@@ -59,6 +59,25 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 - Fixed `InputController.py` bug: missing `initial=False` parameter default
 - Wrote `ai-working-log/DESIGN.md`: full redesign specification for MidiMania
 - Decided to keep PyOpenGL renderer (perspective projection already works; pygame 2D cannot replicate vanishing-point effect without manual math)
+
+### Session 3 (this session)
+**Completed Phase 1.3–1.6**
+
+Phase 1.3 — Remove `pyautogui` keyboard simulation:
+- `KeyCodeConstants.py`: removed `import pyautogui`; dropped `pyautogui.KEY_NAMES` initializer; replaced with plain dict literal; `get_key_code()` now returns `None` for unknown keys via `dict.get()`
+- `KeyMapper.py`: dropped all pyautogui imports and `pyautogui.PAUSE = 0`; `map_midi()` now posts `pygame.KEYDOWN`/`pygame.KEYUP` events directly via `pygame.event.post()`; MIDI input reaches the game loop as native pygame events without OS-level keyboard simulation
+
+Phase 1.4 — Replace `Mp3Player` with `pygame.mixer`:
+- `Mp3Player/__init__.py`: full rewrite using `pygame.mixer.music`; cross-platform (Windows/macOS/Linux); public API preserved (`play/pause/unpause/stop/isplaying/ispaused/volume/milliseconds/seconds`)
+- `Mp3Player/windows.py`: deleted (Windows MCI implementation)
+- `Mp3Player/readme.txt`: deleted
+
+Phase 1.5 — Delete deprecated `GameStageScene.py`:
+- `ui/scenes/GameStageScene.py`: deleted (2D renderer, superseded by OpenGL renderer)
+- `ui/GameDisplay.py`: removed `GameStageScene` import; `render()` is a no-op stub pending Phase 3.3
+
+Phase 1.6 — Thread safety for `Store`:
+- `controllers/__init__.py`: added `threading.Lock`; `get()` and `put()` protected with `with self._lock`; also simplified `get()` using `dict.get()`
 
 ### Session 2 (this commit)
 **Completed Phase 1.2: remove `pygame.midi`, replace with `python-rtmidi`**
