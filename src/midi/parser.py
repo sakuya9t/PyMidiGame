@@ -2,8 +2,10 @@
 src/midi/parser.py — MIDI file parser.
 
 Reads a .mid file and produces a flat, time-absolute list of NoteEvent objects.
-Handles MIDI type 0 (single track), type 1 (multi-track sync), and type 2
-(multi-track async, treated like type 1).
+Handles MIDI type 0 (single track) and type 1 (multi-track sync).
+Type 2 (multi-track async) is explicitly rejected: each track in a type-2 file
+is an independent sequence with its own timing, so merging them into a single
+timeline would produce incorrect results. Pass a type-0 or type-1 file instead.
 
 Tempo map changes mid-file are applied correctly so all times are in
 wall-clock milliseconds from the start of the song.
@@ -42,6 +44,12 @@ class MidiParser:
         4. Emit only NoteEvents whose velocity > 0.
         """
         mid = mido.MidiFile(path)
+        if mid.type == 2:
+            raise ValueError(
+                f"{path!r} is a MIDI type-2 file (multi-track async). "
+                "Type-2 tracks are independent sequences and cannot be merged "
+                "into a single timeline. Convert to type-0 or type-1 first."
+            )
         ticks_per_beat = mid.ticks_per_beat
 
         # --- Build tempo map (list of (abs_tick, tempo_µs)) ---
