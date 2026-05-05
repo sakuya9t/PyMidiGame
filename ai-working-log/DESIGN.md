@@ -4,7 +4,12 @@
 
 MidiMania is a cross-platform, DJmax-style rhythm game where note patterns fall from the top of the screen and players press the corresponding key as each note reaches the judgment bar. Patterns are auto-generated from MIDI files, and the game supports both PC keyboard and physical MIDI keyboard input.
 
-If no MIDI device is detected at startup, the game enters **Demo Mode**: the selected song plays automatically with all notes hit at perfect timing, showing a live 100% score run. Demo mode lets first-time users see the game in action and verify audio/visual output without needing hardware connected.
+**Input modes:**
+- **PC Keyboard** — always available; up to 8 lanes mapped to `A S D F J K L ;`.
+- **MIDI Keyboard** — available when a device is detected at startup.
+- **Demo Mode** — the game plays itself with perfect timing, useful for previewing a song or verifying setup without any input device.
+
+If no MIDI device is detected at startup, the song selection screen defaults to **PC Keyboard** mode. Demo Mode is offered as an explicit option, not the forced path.
 
 ---
 
@@ -105,7 +110,7 @@ class NoteEvent:
 
 **Implementation notes:**
 - Use `mido.MidiFile` to read the file.
-- Handle `type 0` (single track), `type 1` (multi-track sync), and `type 2` (multi-track async) MIDI files.
+- Support `type 0` (single track) and `type 1` (multi-track sync) only. Raise `ValueError` immediately for `type 2` files with a message explaining the issue and how to convert. Type-2 files are asynchronous sequences: each track is independent with its own timing, so merging into one timeline produces incorrect results.
 - Walk through all tracks, accumulate absolute ticks per track, then apply the tempo map (from `set_tempo` meta messages) to convert ticks → milliseconds.
 - Ignore `note_off` for duration calculation: match each `note_on` (velocity > 0) with the next `note_off` or `note_on` with velocity 0 on the same channel+note.
 - Strip notes with velocity 0 at parse time.
@@ -141,11 +146,13 @@ class NoteEvent:
 @dataclass
 class KeyboardClass:
     name: str          # "25key", "49key", etc.
-    key_count: int
+    key_count: int     # Number of physical keys
     midi_low: int      # Lowest MIDI note in this class
     midi_high: int     # Highest MIDI note in this class
-    lane_count: int    # == key_count (MIDI mode) or compressed (PC mode)
+    lane_count: int    # Always == key_count; represents physical key count only
 ```
+
+**Note:** `KeyboardClass` describes a physical keyboard only — it does not encode gameplay mode or lane compression. In PC mode, the effective lane count (4–8 compressed lanes) is determined by `ChartBuilder`, not by `KeyboardClass`.
 
 **Lane assignment (MIDI keyboard mode):**
 ```
@@ -167,10 +174,11 @@ class Note:
     midi_note: int         # Underlying MIDI note number
     time_ms: float         # When it should be hit (audio time)
     duration_ms: float     # Hold duration (0 for tap notes)
-    y: float               # Current screen Y position (pixels)
     hit: bool = False      # Has been hit
     missed: bool = False   # Passed the bar without a hit
 ```
+
+**Note:** Screen Y position is derived at render time by the `Renderer` from `note.time_ms` and the current audio clock — it is not stored on `Note`. This keeps `Note` as pure chart data with no render state mixed in. The formula is: `note_z = (note.time_ms - current_ms) * UNITS_PER_MS` in world space (see Renderer section).
 
 ---
 
@@ -214,8 +222,9 @@ class Chart:
 - `key_labels(mode, kb_class) -> list[str]`: human-readable label for each lane (note name in MIDI mode, keyboard key in PC mode).
 
 **Visual layout rules:**
-- Max lanes displayed: limited by screen width; each lane minimum 30 px wide.
-- For large keyboards (49+), lanes are drawn smaller; a horizontal scroll indicator shows visible range.
+- Lane width is `screen_width / lane_count`, with a minimum of 14 px. Below 14 px, lanes would be unreadable, which cannot happen for any supported keyboard size at 1280px (88 keys × 14 px = 1232 px).
+- **Large-keyboard viewport policy (49+ keys in MIDI mode):** A scrolling viewport shows a fixed-width window of lanes (e.g. 25 lanes at ~51 px each on a 1280px screen). The viewport auto-centers on the cluster of lanes that received input in the last ~1 second, so the active playing region stays visible without manual scrolling. A miniature keyboard strip at the bottom of the HUD shows all lanes in full, with the visible window highlighted, giving the player context for their position.
+- This policy is chosen for v1. Alternatives (zoom-to-fit all lanes, manual scroll, lane collapsing) are out of scope.
 - Black vs white key lanes receive different colors to mirror piano layout.
 
 ---
@@ -291,19 +300,29 @@ The renderer must treat demo signals identically to real player input — column
 
 ### 8. `src/audio/player.py` — Audio Player
 
-**Purpose:** Load and play an audio file, provide a reliable current-time query.
+**Purpose:** Load and play an audio file; provide a reliable current-time query that the scoring engine uses as its timing authority.
 
 **`AudioPlayer`**
 - `load(path: str)`: load file into `pygame.mixer`.
-- `play()`: start playback; record `start_wall_time = time.perf_counter()`.
-- `pause() / resume()`.
+- `play()`: start playback; record `_start_wall_time = time.perf_counter()`; reset `_paused_duration = 0`.
+- `pause()`: record `_pause_start = time.perf_counter()`.
+- `resume()`: accumulate `_paused_duration += time.perf_counter() - _pause_start`.
 - `stop()`.
-- `current_ms() -> float`: `(time.perf_counter() - start_wall_time) * 1000`. This avoids pygame's imprecise `get_pos()`.
+- `current_ms() -> float`:
+  ```
+  elapsed = time.perf_counter() - _start_wall_time - _paused_duration
+  return elapsed * 1000 + AUDIO_OFFSET_MS
+  ```
+  This avoids pygame's imprecise `get_pos()`, correctly excludes paused time, and applies a global calibration offset.
 - `is_playing() -> bool`.
+
+**`AUDIO_OFFSET_MS`** (in `config.py`, default `0`): A manually tunable signed offset in milliseconds applied to every `current_ms()` call. Positive values shift the audio clock forward (notes judged later); negative shifts it backward. This is the single authoritative knob for A/V sync calibration. Scoring always uses `audio.current_ms()` — never raw `time.perf_counter()`.
+
+**Pause semantics:** While paused, `current_ms()` must not advance. The `_paused_duration` accumulator ensures that resume continues from the exact position where the audio was paused, regardless of how long the pause lasts.
 
 **Supported formats:** MP3, OGG, WAV (pygame.mixer limitation).
 
-**Verification:** Play a known-length file, assert `current_ms()` is within ±50 ms of wall clock after 5 seconds.
+**Verification:** Play a known-length file; assert `current_ms()` is within ±50 ms of wall clock after 5 seconds. Separately: pause for 2 seconds, resume, assert time did not advance during the pause (within ±5 ms).
 
 ---
 
@@ -432,11 +451,11 @@ This approach replaces `glDrawPixels` (which copied raw pixel data from CPU to G
 1. Scan `songs/` directory for subdirectories containing both `audio.*` and `chart.mid`.
 2. For each song: display title, artist (from `meta.json` if present), key class, BPM.
 3. **Check for MIDI devices** via `MidiDeviceManager.list_devices()`.
-   - If **no MIDI devices found**: automatically start demo mode on the first available song. Skip manual song selection entirely; the game enters `DEMO` state immediately. A status message informs the user: *"No MIDI device detected — playing in Demo Mode. Connect a device and restart to play."*
-   - If **devices are present**: continue to the normal selection flow.
-4. User selects a song and input mode (`PC Keyboard` / `MIDI Keyboard`).
+   - If **no MIDI devices found**: show the song list with input mode defaulting to `PC Keyboard`. A status line informs the user: *"No MIDI device detected — using PC Keyboard mode."* `MIDI Keyboard` option is greyed out.
+   - If **devices are present**: all three input modes are available.
+4. User selects a song and input mode (`PC Keyboard` / `MIDI Keyboard` / `Demo`).
 5. If `MIDI Keyboard`: show device selection dropdown.
-6. Confirm → `GameEngine.load()` → transition to gameplay (or `GameEngine.load(demo=True)` in demo mode).
+6. Confirm → `GameEngine.load()` → transition to gameplay (or `GameEngine.load(demo=True)` when Demo mode is selected).
 
 ---
 
@@ -554,6 +573,7 @@ HIT_WINDOWS = {
 }
 SONGS_DIR           = "songs"
 AUDIO_BUFFER_MS     = 64         # pygame mixer buffer size
+AUDIO_OFFSET_MS     = 0          # A/V sync calibration offset (ms); positive = shift audio forward
 PC_KEY_MAP          = [K_a, K_s, K_d, K_f, K_j, K_k, K_l, K_SEMICOLON]
 ```
 
@@ -642,11 +662,11 @@ PC_KEY_MAP          = [K_a, K_s, K_d, K_f, K_j, K_k, K_l, K_SEMICOLON]
 
 **Step 4.4 — Demo mode**
 - Implement `src/game/demo.py` (`DemoPlayer`).
-- In `src/ui/menu.py`: call `MidiDeviceManager.list_devices()` on startup; if empty, call `GameEngine.load(demo=True)` on the first available song.
+- In `src/ui/menu.py`: call `MidiDeviceManager.list_devices()` on startup; if empty, default input mode to PC Keyboard and grey out MIDI Keyboard; expose Demo as an explicit selectable mode.
 - In `GameEngine.update()`: when `is_demo()`, call `demo_player.tick()` and route signals to scoring and hit effects.
 - In `Renderer`: draw "DEMO" badge when `engine.is_demo()`.
 - In `src/ui/results.py`: show demo banner and "Play this song" option when demo mode.
-- Verify: launch with no MIDI device connected; game auto-starts demo; score reaches 1,000,000 / 100% / S rank; "DEMO" badge is visible throughout.
+- Verify: launch with no MIDI device connected; song list shows with PC Keyboard default; select Demo mode manually; score reaches 1,000,000 / 100% / S rank; "DEMO" badge is visible throughout.
 
 ---
 
@@ -662,10 +682,10 @@ PC_KEY_MAP          = [K_a, K_s, K_d, K_f, K_j, K_k, K_l, K_SEMICOLON]
 - Combo pop animation on increment.
 - Verify: score matches `ScoringEngine.score` each frame.
 
-**Step 5.3 — Large keyboard scrolling** (49key+)
-- For MIDI mode with many lanes, add left/right scroll to show active note region.
-- Or: auto-center view on the most recently active lane cluster.
-- Verify: a 49-key chart renders without lanes being too narrow to see.
+**Step 5.3 — Large keyboard viewport** (49key+)
+- Implement scrolling viewport: fixed window of ~25 visible lanes, auto-centered on the most recently active lane cluster (last ~1 second of input).
+- Add miniature keyboard strip to HUD showing all lanes with the visible window highlighted.
+- Verify: a 49-key chart renders with lane width ≥ 14 px; viewport follows active lanes; miniature strip shows full range.
 
 **Step 5.4 — Cross-platform verification**
 - Run full playthrough on Windows, macOS, and Ubuntu.
@@ -691,7 +711,7 @@ PC_KEY_MAP          = [K_a, K_s, K_d, K_f, K_j, K_k, K_l, K_SEMICOLON]
 | KeyboardInputHandler | Integration | Keypress maps to correct lane |
 | MidiInputHandler | Integration | MIDI note maps to correct lane |
 | DemoPlayer | Unit | All notes hit; `ScoringEngine.accuracy == 1.0` at end |
-| Demo mode (no device) | End-to-end | Auto-starts demo on launch; DEMO badge visible; 100% score |
+| Demo mode (no device) | End-to-end | Song list shown with PC Keyboard default; Demo selectable; DEMO badge visible; 100% score |
 | Renderer | Visual | 60 FPS on reference hardware, no flicker |
 | Full game | End-to-end | Song loads, plays, scores, results show correctly |
 

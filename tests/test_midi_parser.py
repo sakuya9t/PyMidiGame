@@ -453,5 +453,42 @@ class TestMidiParserWithType0Fixture(unittest.TestCase):
         self.assertEqual(len(t0_events), len(direct_notes))
 
 
+class TestMidiParserType2Rejection(unittest.TestCase):
+    """MidiParser must reject type-2 files with a clear ValueError."""
+
+    def _make_type2_midi(self) -> mido.MidiFile:
+        """Build a minimal in-memory type-2 MIDI file."""
+        mid = mido.MidiFile(type=2, ticks_per_beat=480)
+        track = mido.MidiTrack()
+        track.append(mido.Message('note_on',  note=60, velocity=64, time=0))
+        track.append(mido.Message('note_off', note=60, velocity=0,  time=480))
+        mid.tracks.append(track)
+        return mid
+
+    def test_type2_raises_value_error(self):
+        mid = self._make_type2_midi()
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as f:
+            path = f.name
+        try:
+            mid.save(path)
+            with self.assertRaises(ValueError) as ctx:
+                MidiParser.parse(path)
+            self.assertIn('type-2', str(ctx.exception))
+        finally:
+            os.unlink(path)
+
+    def test_type2_error_message_mentions_conversion(self):
+        mid = self._make_type2_midi()
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as f:
+            path = f.name
+        try:
+            mid.save(path)
+            with self.assertRaises(ValueError) as ctx:
+                MidiParser.parse(path)
+            self.assertIn('type-0', str(ctx.exception))
+        finally:
+            os.unlink(path)
+
+
 if __name__ == '__main__':
     unittest.main()
