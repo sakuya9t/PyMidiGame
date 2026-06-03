@@ -45,9 +45,14 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 |---|------|--------|
 | 3.1 | Wire `pygame.mixer` audio: load, play, sync position to game clock | ✅ Done |
 | 3.2 | Song selection screen (browse `songs/` directory) | ⬜ Todo |
-| 3.3 | Refactor OpenGL renderer: decouple from `Store`, fix `glDrawPixels` → pygame surface blit | ⬜ Todo |
-| 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) rendered as pygame surface over GL frame | ⬜ Todo |
-| 3.5 | Results screen (grade, score, accuracy, hit breakdown) | ⬜ Todo |
+| 3.3 | Renderer (decoupled from `Store`) | 🔶 2D v1 shipped (`src/ui/renderer.py`); OpenGL perspective port pending |
+| 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) | 🔶 Done in 2D renderer; re-do as GL overlay with §13 |
+| 3.5 | Results screen (grade, score, accuracy) | 🔶 Basic overlay in 2D renderer; full screen pending |
+
+> **▶ Playable now (demo mode):** `python mania.py SONG.mid [--audio SONG.ogg]`
+> Auto-plays a perfect run (no MIDI device needed). `--play` for PC-keyboard play
+> (lanes A S D F J K L ; for ≤8 lanes), `--mode pc` for 8-lane compression,
+> Space = pause/resume, Esc = quit.
 
 ---
 
@@ -69,6 +74,15 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 #### Phase 3.1 — AudioPlayer (`src/audio/player.py`, new `src/audio/` package)
 - `AudioPlayer` satisfies the `Clock` Protocol. Timing uses an injectable wall-clock source (not the backend's position query), so `current_ms()`, pause/resume exclusion, and `AUDIO_OFFSET_MS` are unit-testable headlessly. `pygame.mixer` is isolated behind an injectable backend (lazy `import pygame`), so the module imports with no audio device.
 - `tests/test_audio_player.py` — 8 tests (clock advance, pause-freeze, resume excludes paused time, offset, is_playing transitions, backend forwarding, redundant pause/resume safety).
+
+#### Phase 3.3 — Renderer + entry point → **first playable** 🎉
+- **Decision:** the legacy OpenGL renderer (`ui/graph`) is tightly coupled to legacy types and the broken `glDrawPixels` HUD (§13). For a reliable, verifiable first playable, shipped a clean **pygame 2D lane renderer** instead; the OpenGL vanishing-point port (§13) remains a visual upgrade. The geometry (`lane_x`/`note_center_y`) is the same mapping a perspective renderer would project.
+- `src/ui/renderer.py` (new `src/ui/` package): `Renderer.render(target, chart, current_ms, scoring, state, countdown, is_demo)` — falling-note lanes, hit bar, HUD (score/combo/accuracy/DEMO badge), 3-2-1 countdown, results overlay (rank/score/accuracy/max-combo). Pure helpers `lane_x`, `note_center_y`.
+- `src/app.py` — wiring (`build_chart`, `make_engine`, `build_keymap`) split from the pygame `run()` loop; `mania.py` — CLI launcher (`SONG.mid [--audio] [--mode] [--play]`).
+- `tests/test_renderer.py` — 8 tests: pure geometry + a **headless** smoke (SDL dummy video/audio) that drives the fully-assembled loop (engine + scoring + demo + renderer) for a full chart → renders every frame incl. countdown & results overlays without error and finishes at 1,000,000 / accuracy 1.0.
+- **Run it:** `python mania.py tests/fixtures/twinkle.mid` → watch a perfect demo auto-play.
+
+**Suite: 211 tests, 0 failures (1 skip).**
 
 ### Session 7
 **Completed Phase 2.4 — Game Engine (brainstorm → spec → TDD)**
