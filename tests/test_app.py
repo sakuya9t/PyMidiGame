@@ -14,7 +14,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 
-from src.app import make_audio, resolve_audio_source
+import pygame
+
+from src.app import build_keymap, make_audio, resolve_audio_source
 
 
 class FakeBackend:
@@ -43,6 +45,15 @@ class FakeSynthesizer:
         if self._raise:
             raise RuntimeError('no synth')
         return 'generated-preview.wav'
+
+
+class TestBuildKeymap(unittest.TestCase):
+
+    def test_space_is_middle_lane_in_nine_lane_pc_layout(self):
+        keymap = build_keymap(9)
+        self.assertEqual(len(keymap), 9)
+        self.assertEqual(keymap[pygame.K_SPACE], 4)
+        self.assertNotIn(pygame.K_p, keymap)
 
 
 class TestResolveAudioSource(unittest.TestCase):

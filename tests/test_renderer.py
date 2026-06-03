@@ -19,6 +19,7 @@ os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 import pygame
 
 from src.ui.renderer import lane_x, note_center_y, Renderer
+from src.ui.materials import NeonMaterialKit
 from src.app import make_engine, SIZE
 from src.game.chart import Note, Chart
 from src.game.engine import GameState
@@ -66,6 +67,16 @@ class TestNoteCenterY(unittest.TestCase):
 
     def test_past_note_is_below_bar(self):
         self.assertAlmostEqual(note_center_y(900, 1000, hit_y=600, pixels_per_ms=0.3), 630)
+
+
+class TestMaterialAtlas(unittest.TestCase):
+
+    def test_neon_texture_atlas_loads(self):
+        kit = NeonMaterialKit()
+        self.assertTrue(kit.using_atlas)
+        self.assertIsNotNone(kit._asset('blue', 'lane', (24, 120)))
+        self.assertIsNotNone(kit._asset('red', 'panel', (180, 42)))
+        self.assertIsNotNone(kit._asset('blue', 'gauge_filled', (180, 18)))
 
 
 class TestHeadlessPlayableLoop(unittest.TestCase):
@@ -134,6 +145,17 @@ class TestHeadlessPlayableLoop(unittest.TestCase):
         self.renderer.render(self.surface, chart, engine.current_ms(), scoring,
                              state=engine.state, countdown=engine.countdown_value(),
                              is_demo=engine.is_demo())
+
+    def test_renders_nine_lane_pc_layout(self):
+        notes = [Note(lane=i, midi_note=60 + i, time_ms=500.0 + i * 100.0,
+                      duration_ms=120.0) for i in range(9)]
+        chart = Chart(notes=notes, kb_class=_KB, mode='pc',
+                      lane_count=9, total_duration_ms=notes[-1].time_ms)
+        clock = _ManualClock()
+        engine, scoring = make_engine(chart, clock, demo=False)
+        self.renderer.render(self.surface, chart, 500.0, scoring,
+                             state=GameState.PLAYING, countdown=0,
+                             is_demo=False)
 
     def _render(self, chart, engine, scoring):
         self.renderer.render(self.surface, chart, engine.current_ms(), scoring,

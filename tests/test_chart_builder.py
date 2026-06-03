@@ -4,7 +4,7 @@ Unit tests for src/game/chart.py — Note, Chart, and ChartBuilder.build().
 Tests cover (per ai-working-log/specs/2026-05-04-chart-builder-design.md):
   - Note / Chart dataclass fields
   - MIDI mode: 1:1 lane mapping (lane = note - midi_low)
-  - PC mode: linear interpolation onto 8 lanes, edge anchoring, half-up rounding
+  - PC mode: linear interpolation onto 9 lanes, edge anchoring, half-up rounding
   - Range validation: notes outside kb_class range raise ValueError (both modes)
   - Sort order: non-decreasing by time_ms; ties keep input order
   - total_duration_ms: longest note end, including non-last hold notes
@@ -96,11 +96,11 @@ class TestMidiMode(unittest.TestCase):
 
 
 class TestPcMode(unittest.TestCase):
-    """PC mode: linear interpolation onto 8 lanes."""
+    """PC mode: linear interpolation onto 9 lanes."""
 
-    def test_lane_count_is_eight(self):
+    def test_lane_count_is_nine(self):
         chart = ChartBuilder.build([_ev(60)], KB_49, 'pc')
-        self.assertEqual(chart.lane_count, 8)
+        self.assertEqual(chart.lane_count, 9)
 
     def test_song_min_maps_to_lane_zero(self):
         events = [_ev(60), _ev(71)]
@@ -108,14 +108,14 @@ class TestPcMode(unittest.TestCase):
         lanes = {n.midi_note: n.lane for n in chart.notes}
         self.assertEqual(lanes[60], 0)
 
-    def test_song_max_maps_to_lane_seven(self):
+    def test_song_max_maps_to_lane_eight(self):
         events = [_ev(60), _ev(71)]
         chart = ChartBuilder.build(events, KB_49, 'pc')
         lanes = {n.midi_note: n.lane for n in chart.notes}
-        self.assertEqual(lanes[71], 7)
+        self.assertEqual(lanes[71], 8)
 
     def test_edge_anchoring_across_ranges(self):
-        # song_min always lane 0, song_max always lane 7, for spans 12/24/48
+        # song_min always lane 0, song_max always lane 8, for spans 12/24/48
         # (all within the 49key range [36, 84]).
         for low, high in [(60, 72), (48, 72), (36, 84)]:
             events = [_ev(low), _ev(high)]
@@ -123,14 +123,14 @@ class TestPcMode(unittest.TestCase):
             lanes = {n.midi_note: n.lane for n in chart.notes}
             with self.subTest(span=high - low):
                 self.assertEqual(lanes[low], 0)
-                self.assertEqual(lanes[high], 7)
+                self.assertEqual(lanes[high], 8)
 
-    def test_narrow_two_pitch_song_uses_lanes_0_and_7(self):
+    def test_narrow_two_pitch_song_uses_lanes_0_and_8(self):
         events = [_ev(60), _ev(61)]
         chart = ChartBuilder.build(events, KB_49, 'pc')
         lanes = {n.midi_note: n.lane for n in chart.notes}
         self.assertEqual(lanes[60], 0)
-        self.assertEqual(lanes[61], 7)
+        self.assertEqual(lanes[61], 8)
 
     def test_single_pitch_song_collapses_to_lane_zero(self):
         events = [_ev(60), _ev(60), _ev(60)]
@@ -139,16 +139,16 @@ class TestPcMode(unittest.TestCase):
             self.assertEqual(note.lane, 0)
 
     def test_midrange_pitch_lands_as_expected(self):
-        # span [60, 71]: note 65 → int(5/11 * 7 + 0.5) = int(3.68) = 3
+        # span [60, 71]: note 65 -> int(5/11 * 8 + 0.5) = int(4.13) = 4
         events = [_ev(60), _ev(65), _ev(71)]
         chart = ChartBuilder.build(events, KB_49, 'pc')
         lanes = {n.midi_note: n.lane for n in chart.notes}
-        self.assertEqual(lanes[65], 3)
+        self.assertEqual(lanes[65], 4)
 
     def test_half_up_rounding_not_bankers(self):
-        # span [60, 74]: note 65 → 5/14 * 7 = 2.5 exactly.
+        # span [60, 76]: note 65 -> 5/16 * 8 = 2.5 exactly.
         # half-up: int(2.5 + 0.5) = 3. banker's round(2.5) = 2.
-        events = [_ev(60), _ev(65), _ev(74)]
+        events = [_ev(60), _ev(65), _ev(76)]
         chart = ChartBuilder.build(events, KB_49, 'pc')
         lanes = {n.midi_note: n.lane for n in chart.notes}
         self.assertEqual(lanes[65], 3)
@@ -237,7 +237,7 @@ class TestModesAndInputs(unittest.TestCase):
     def test_empty_events_pc_mode(self):
         chart = ChartBuilder.build([], KB_25, 'pc')
         self.assertEqual(chart.notes, [])
-        self.assertEqual(chart.lane_count, 8)
+        self.assertEqual(chart.lane_count, 9)
         self.assertEqual(chart.total_duration_ms, 0.0)
         self.assertEqual(chart.mode, 'pc')
 

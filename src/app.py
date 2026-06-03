@@ -27,8 +27,9 @@ from src.ui.renderer import Renderer
 
 SIZE = (960, 720)
 
-# PC keyboard lane mapping for up to 8 lanes: A S D F J K L ;
+# PC keyboard lane mapping for 9 lanes: A S D F Space J K L ;
 PC_KEYS = [pygame.K_a, pygame.K_s, pygame.K_d, pygame.K_f,
+           pygame.K_SPACE,
            pygame.K_j, pygame.K_k, pygame.K_l, pygame.K_SEMICOLON]
 
 
@@ -49,7 +50,7 @@ def make_engine(chart: Chart, clock, *, demo: bool = True):
 
 
 def build_keymap(lane_count: int) -> dict[int, int]:
-    """Map pygame key codes to lane indices (best-effort for up to 8 lanes)."""
+    """Map pygame key codes to lane indices (best-effort for up to 9 PC lanes)."""
     return {key: lane for lane, key in enumerate(PC_KEYS) if lane < lane_count}
 
 
@@ -124,10 +125,10 @@ def run(midi_path: str, audio_path: str | None = None, *,
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
-                elif event.key == pygame.K_SPACE:
-                    engine.resume() if engine.state.name == 'PAUSED' else engine.pause()
                 elif not engine.is_demo() and event.key in keymap:
                     engine.handle_input(keymap[event.key])
+                elif event.key == pygame.K_p:
+                    engine.resume() if engine.state.name == 'PAUSED' else engine.pause()
 
         engine.update(dt_ms)
         renderer.render(screen, chart, engine.current_ms(), scoring,

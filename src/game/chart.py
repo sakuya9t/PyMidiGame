@@ -7,8 +7,8 @@ consume. This is the last stage of the MIDI ingestion pipeline before gameplay.
 
 Two lane-assignment modes:
   "midi" — 1:1 mapping; lane = note - kb_class.midi_low (lane_count = key_count).
-  "pc"   — song pitch range compressed onto 8 lanes by linear interpolation,
-           matching the 8-key PC layout [A S D F J K L ;].
+  "pc"   — song pitch range compressed onto 9 lanes by linear interpolation,
+           matching the PC layout [A S D F Space J K L ;].
 
 See ai-working-log/specs/2026-05-04-chart-builder-design.md.
 """
@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from src.midi.classifier import KeyboardClass
 from src.midi.parser import NoteEvent
 
-# Number of lanes in PC mode (matches PC_KEY_MAP = [A S D F J K L ;]).
-PC_LANE_COUNT = 8
+# Number of lanes in PC mode (matches PC_KEYS = [A S D F Space J K L ;]).
+PC_LANE_COUNT = 9
 
 
 @dataclass
@@ -40,7 +40,7 @@ class Chart:
     notes: list[Note]          # Non-decreasing by time_ms; chord notes adjacent
     kb_class: KeyboardClass
     mode: str                  # "midi" or "pc"
-    lane_count: int            # kb_class.key_count for "midi"; 8 for "pc"
+    lane_count: int            # kb_class.key_count for "midi"; 9 for "pc"
     total_duration_ms: float   # max(time_ms + duration_ms); 0.0 if empty
 
 
