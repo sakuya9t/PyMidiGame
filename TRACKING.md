@@ -34,7 +34,7 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 |---|------|--------|
 | 2.1 | `src/midi/parser.py` — MIDI file → `NoteEvent` list (ticks → ms, tempo map) | ✅ Done |
 | 2.2 | `src/midi/classifier.py` — detect keyboard size class from note range | ✅ Done |
-| 2.3 | `src/game/chart.py` — chart builder, lane assignment, `Note`/`Chart` dataclasses | 📝 Spec drafted |
+| 2.3 | `src/game/chart.py` — chart builder, lane assignment, `Note`/`Chart` dataclasses | ✅ Done |
 | 2.4 | `src/game/engine.py` — game loop, state machine, scroll position | ⬜ Todo |
 | 2.5 | `src/game/scoring.py` — hit windows (PERFECT/GREAT/GOOD/MISS), score, combo | ⬜ Todo |
 | 2.6 | `src/game/demo.py` — DemoPlayer auto-hits all notes at perfect timing | ⬜ Todo |
@@ -53,7 +53,32 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 
 ## Session Log
 
-### Session 5 (current)
+### Session 6 (current)
+**Completed Phase 2.3 — Chart Builder (TDD)**
+
+Implemented per [`ai-working-log/specs/2026-05-04-chart-builder-design.md`](ai-working-log/specs/2026-05-04-chart-builder-design.md), test-first.
+
+New package `src/game/` with `src/game/chart.py`:
+- `Note` dataclass: `lane`, `midi_note`, `time_ms`, `duration_ms`, `hit=False`, `missed=False`. Renderer derives world Z from `time_ms`; `Note` stores no `y`.
+- `Chart` dataclass: `notes` (non-decreasing by `time_ms`, chord notes adjacent), `kb_class`, `mode`, `lane_count`, `total_duration_ms`.
+- `ChartBuilder.build(events, kb_class, mode)`:
+  - `mode` ∉ {`"midi"`, `"pc"`} → `ValueError`.
+  - Defensive range check: any event note outside `[kb_class.midi_low, kb_class.midi_high]` → `ValueError` (both modes).
+  - `"midi"`: 1:1, `lane = note - midi_low`, `lane_count = kb_class.key_count`.
+  - `"pc"`: song range compressed onto `PC_LANE_COUNT = 8` lanes by linear interpolation; `song_min` → lane 0, `song_max` → lane 7; single-pitch song → all lane 0; half-up rounding `int(x + 0.5)` (not banker's `round()`).
+  - Empty events → empty `Chart` with correct `lane_count`, `total_duration_ms = 0.0`.
+  - Stable sort by `time_ms`; `total_duration_ms = max(time_ms + duration_ms)`.
+
+Adjacent classifier change (`src/midi/classifier.py`):
+- `classify()` no longer falls back to 88key for out-of-range notes. A note range exceeding `[21, 108]` now raises `ValueError` (the game supports up to 88 keys).
+
+Tests:
+- New `tests/test_chart_builder.py`: 36 tests across 8 classes — `Note`/`Chart` dataclasses, MIDI mode anchors & lane bounds, PC mode edge anchoring / narrow & single-pitch / mid-range / half-up-vs-banker's rounding, range validation (both modes), sort order & ties, `total_duration_ms` (incl. non-last hold note longest), mode/empty handling, classifier integration.
+- Updated `tests/test_midi_classifier.py`: replaced the 88key-fallback test with an in-range `[21, 100]` → 88key test; added `TestClassifyRejectsOutOfRange` (note 109 → `ValueError`, note 20 → `ValueError`).
+
+**Manual verification:** `python -m unittest discover tests` → 130 tests, 0 failures (1 skip).
+
+### Session 5
 **Phase 2.3 spec drafted; type-2 rejection landed**
 
 Phase 2.3 — Chart Builder design spec drafted at [`ai-working-log/specs/2026-05-04-chart-builder-design.md`](ai-working-log/specs/2026-05-04-chart-builder-design.md). Current decisions:
