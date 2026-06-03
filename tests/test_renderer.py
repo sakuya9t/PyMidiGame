@@ -111,6 +111,19 @@ class TestHeadlessPlayableLoop(unittest.TestCase):
         self.assertAlmostEqual(scoring.accuracy, 1.0)
         self.assertIn(GameState.DEMO, seen_states)
 
+    def test_demo_without_audio_survives_play(self):
+        # Regression: demo mode with no --audio must not crash when the engine
+        # calls clock.play() (AudioPlayer with nothing loaded -> 'music not loaded').
+        from src.audio.player import AudioPlayer
+        chart = Chart(notes=[Note(lane=0, midi_note=48, time_ms=500.0, duration_ms=0.0)],
+                      kb_class=_KB, mode='midi', lane_count=25, total_duration_ms=500.0)
+        engine, scoring = make_engine(chart, AudioPlayer(), demo=True)
+        engine.start()
+        for _ in range(4):
+            engine.update(1000.0)  # crosses the 3000 ms countdown -> clock.play()
+            self._render(chart, engine, scoring)
+        self.assertEqual(engine.state, GameState.DEMO)
+
     def test_renders_countdown_frame(self):
         chart = Chart(notes=[], kb_class=_KB, mode='midi',
                       lane_count=25, total_duration_ms=0.0)

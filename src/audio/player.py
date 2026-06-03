@@ -59,32 +59,38 @@ class AudioPlayer:
         self._paused = False
         self._pause_start = 0.0
         self._paused_duration = 0.0
+        self._loaded = False
 
     def load(self, path: str) -> None:
         self._backend.load(path)
+        self._loaded = True
 
     def play(self) -> None:
         self._start = self._time()
         self._paused = False
         self._paused_duration = 0.0
-        self._backend.play()
+        if self._loaded:
+            self._backend.play()
 
     def pause(self) -> None:
         if self._start is None or self._paused:
             return
         self._pause_start = self._time()
         self._paused = True
-        self._backend.pause()
+        if self._loaded:
+            self._backend.pause()
 
     def resume(self) -> None:
         if not self._paused:
             return
         self._paused_duration += self._time() - self._pause_start
         self._paused = False
-        self._backend.unpause()
+        if self._loaded:
+            self._backend.unpause()
 
     def stop(self) -> None:
-        self._backend.stop()
+        if self._loaded:
+            self._backend.stop()
         self._start = None
         self._paused = False
 

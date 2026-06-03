@@ -118,6 +118,7 @@ class TestBackendForwarding(unittest.TestCase):
 
     def test_redundant_pause_resume_are_safe(self):
         player, clock, backend = _player()
+        player.load('song.ogg')
         player.play()
         player.resume()  # not paused -> no-op
         player.pause()
@@ -125,6 +126,31 @@ class TestBackendForwarding(unittest.TestCase):
         # Only one pause forwarded, no stray unpause.
         self.assertEqual(backend.calls.count(('pause',)), 1)
         self.assertEqual(backend.calls.count(('unpause',)), 0)
+
+
+class TestNoAudioLoaded(unittest.TestCase):
+    """Demo mode runs without an audio file: AudioPlayer is a pure wall clock
+    and must not touch the mixer backend (which would raise 'music not loaded')."""
+
+    def test_play_without_load_does_not_touch_backend(self):
+        player, clock, backend = _player()
+        player.play()
+        self.assertEqual(backend.calls, [])
+
+    def test_lifecycle_without_load_does_not_touch_backend(self):
+        player, clock, backend = _player()
+        player.play()
+        player.pause()
+        player.resume()
+        player.stop()
+        self.assertEqual(backend.calls, [])
+
+    def test_clock_still_advances_without_audio(self):
+        player, clock, backend = _player()
+        player.play()
+        clock.t = 3.0
+        self.assertAlmostEqual(player.current_ms(), 3000.0)
+        self.assertTrue(player.is_playing())
 
 
 if __name__ == '__main__':
