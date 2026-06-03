@@ -107,6 +107,7 @@ class Clock(Protocol):
 
 class Scoring(Protocol):
     """Scoring engine. ScoringEngine (Phase 2.5) satisfies this structurally."""
+    def reset(self, chart: Chart) -> None: ...
     def register_hit(self, lane: int, time_ms: float) -> object: ...
     def tick(self, current_ms: float) -> None: ...
 
@@ -119,6 +120,15 @@ class DemoSource(Protocol):
 `Scoring.register_hit` returns the scoring engine's `Judgment`; the engine
 discards the return value (hit effects are a renderer concern, wired later), so
 its annotation here is `object`.
+
+`Scoring.reset(chart)` binds the scoring engine to the chart's notes and clears
+score/combo/hit state. The engine is constructed with a persistent `scoring`
+collaborator (it accumulates results the results screen queries after the run),
+so `scoring` itself is not re-injected per run — instead `load()` calls
+`scoring.reset(chart)` to (re)bind it. This is what makes the "`load` may be
+called again to reset" promise enforceable. (`DemoSource`, by contrast, is a
+per-`load` argument already bound to its chart at construction, so it needs no
+reset hook.)
 
 ## `GameEngine`
 
@@ -136,7 +146,7 @@ class GameEngine:
 
     def start(self) -> None: ...
     def update(self, dt_ms: float) -> None: ...
-    def handle_input(self, lane: int, time_ms: float) -> None: ...
+    def handle_input(self, lane: int) -> None: ...
     def pause(self) -> None: ...
     def resume(self) -> None: ...
 
@@ -154,9 +164,12 @@ class GameEngine:
 - `__init__` stores `clock`, `scoring`, `countdown_ms`, `end_padding_ms`. State is
   `IDLE`; no chart yet.
 - `load(chart, demo_source=None)` stores the chart and optional demo source,
-  resets the countdown accumulator to `0.0`, and sets state to `IDLE`. The
-  presence of `demo_source` selects a demo run (post-countdown state `DEMO`);
-  absence selects a normal run (`PLAYING`). `load` may be called again to reset.
+  calls `scoring.reset(chart)` to (re)bind scoring to this chart and clear its
+  score/combo/hit state, resets the countdown accumulator to `0.0`, clears the
+  cached finish time, and sets state to `IDLE`. The presence of `demo_source`
+  selects a demo run (post-countdown state `DEMO`); absence selects a normal run
+  (`PLAYING`). `load` may be called again to reset to a fresh run (possibly a
+  different chart); the `scoring.reset(chart)` call is what makes that sound.
 
 ### State machine
 
@@ -191,19 +204,40 @@ frame (caller-supplied, e.g. from the pygame clock).
 - `PLAYING`:
   1. `now = clock.current_ms()`
   2. `scoring.tick(now)`
-  3. if `now ≥ chart.total_duration_ms + end_padding_ms`: `clock.stop()`, state →
-     `FINISHED`.
+  3. if `now ≥ chart.total_duration_ms + end_padding_ms`: cache
+     `_finished_ms = now`, then `clock.stop()`, state → `FINISHED`.
 - `DEMO`: as `PLAYING`, but before `scoring.tick` it pulls demo input:
   1. `now = clock.current_ms()`
   2. for `sig in demo_source.tick(now)`: `scoring.register_hit(sig.lane, sig.time_ms)`
   3. `scoring.tick(now)`
-  4. finish check as `PLAYING`.
+  4. finish check as `PLAYING` (cache `_finished_ms` before `clock.stop()`).
 
-### `handle_input(lane, time_ms)`
+The finish time is cached **before** `clock.stop()` because `AudioPlayer.stop()`
+(§8) does not guarantee it preserves the final position — a future `stop()` may
+reset the clock to 0. `current_ms()` reads the cached value in `FINISHED` so the
+renderer's scroll position does not snap backward at the end of the run.
 
-Forwards to `scoring.register_hit(lane, time_ms)` **only** in `PLAYING`. No-op in
-every other state — notably `DEMO` (real input is ignored during demo playback),
-`COUNTDOWN`, `PAUSED`, `IDLE`, `FINISHED`.
+Demo's perfect timing comes from forwarding each signal's own `sig.time_ms`
+(which equals the note's `time_ms`), not the wall clock — so demo hits always
+land inside the PERFECT window regardless of frame cadence.
+
+### `handle_input(lane)`
+
+Forwards to `scoring.register_hit(lane, self.current_ms())` **only** in
+`PLAYING`. No-op in every other state — notably `DEMO` (real input is ignored
+during demo playback), `COUNTDOWN`, `PAUSED`, `IDLE`, `FINISHED`.
+
+The engine is the timestamp authority: `handle_input` takes only the `lane` and
+stamps the hit with `self.current_ms()` (which is `clock.current_ms()` in
+`PLAYING`). It deliberately does **not** accept a caller-supplied `time_ms`,
+because raw pygame `KEYDOWN` and rtmidi timestamps are not in the audio/chart
+clock domain; trusting them would corrupt the ±35 ms judgments. DESIGN.md §8
+establishes the same contract ("scoring always uses `audio.current_ms()`"). The
+small, *consistent* latency between physical press and the frame that calls
+`handle_input` is acceptable and is the same for every input; per-source
+timestamp translation is out of scope. The §11/§12 input handlers still produce
+`InputSignal` for lane extraction, but the wiring calls `engine.handle_input(lane)`
+and lets the engine own the time.
 
 ### `pause()` / `resume()`
 
@@ -224,11 +258,14 @@ The single source the renderer reads to position notes
 |---|---|
 | `IDLE` | `-countdown_ms` |
 | `COUNTDOWN` | `_countdown_elapsed - countdown_ms` (negative; rises toward 0) |
-| `PLAYING` / `DEMO` / `PAUSED` / `FINISHED` | `clock.current_ms()` |
+| `PLAYING` / `DEMO` / `PAUSED` | `clock.current_ms()` |
+| `FINISHED` | `_finished_ms` (cached at finish, before `clock.stop()`) |
 
 Negative pre-roll during `IDLE`/`COUNTDOWN` parks the first notes off-screen and
 scrolls them in during the 3-2-1, so the board is already moving when play
-begins. `PAUSED` freezes because the clock is paused.
+begins. `PAUSED` freezes because the clock is paused. `FINISHED` returns the
+cached finish time so a position-resetting `clock.stop()` cannot snap the
+renderer's scroll back to 0.
 
 ### `countdown_value()`
 
@@ -243,7 +280,22 @@ ceil(countdown_ms/1000)]`. Returns `0` outside `COUNTDOWN`.
 - `is_finished()`: `state == FINISHED`.
 - `state`: read-only property exposing the current `GameState`.
 
-## Error policy
+### Finish semantics: chart tail, not audio completion
+
+The run ends at `chart.total_duration_ms + end_padding_ms` — when the last note's
+hit window has fully closed plus a short tail — **not** when the audio file
+finishes. This is an intentional change from DESIGN.md §9's "all notes resolved
+and audio done" wording (chosen during brainstorming), and §9 is updated to
+match.
+
+Rationale: the gameplay-meaningful end is when no note can still be judged.
+`end_padding_ms` (default 2000) covers the last note resolving plus a brief
+ring-out. Tying finish to audio length instead would make the `Clock` Protocol
+carry a duration contract it otherwise doesn't need, and would stall on a results
+screen through a long instrumental outro. Tradeoff: a song whose audio outro runs
+well past the last note will have its audio stopped at the chart tail. If a song
+ever needs its full outro, raise `end_padding_ms` for that run — the knob is
+per-engine. No audio-duration contract is added to `Clock` in v1.
 
 | Condition | Behavior |
 |---|---|
@@ -266,7 +318,8 @@ fakes for the three collaborators.
 
 - `FakeClock`: scriptable `current_ms` (settable by the test); records the call
   order of `play`/`pause`/`resume`/`stop`; `is_playing` reflects the last call.
-- `FakeScoring`: records `register_hit(lane, time_ms)` calls and `tick(now)` calls.
+- `FakeScoring`: records `reset(chart)` calls, `register_hit(lane, time_ms)`
+  calls, and `tick(now)` calls.
 - `FakeDemoSource`: returns a scripted `list[InputSignal]` per `tick`, and records
   the `now` it was called with.
 
@@ -281,6 +334,8 @@ fakes for the three collaborators.
 - `start()` before `load()` → `RuntimeError`.
 - `update()` before `load()` → `RuntimeError`.
 - After `load`, state is `IDLE`; `start()` → `COUNTDOWN`; clock.play **not** called.
+- `load(chart)` calls `scoring.reset(chart)` exactly once with that chart.
+- A second `load(chart2)` calls `scoring.reset(chart2)` and returns state to `IDLE`.
 - `start()` when already in `COUNTDOWN`/`PLAYING` → `RuntimeError`.
 
 ### Countdown
@@ -298,7 +353,10 @@ fakes for the three collaborators.
 ### Playing
 
 - In `PLAYING`, each `update` calls `scoring.tick(clock.current_ms())`.
-- `handle_input(lane, t)` in `PLAYING` forwards one `register_hit(lane, t)`.
+- `handle_input(lane)` in `PLAYING` forwards one `register_hit(lane, now)` where
+  `now == clock.current_ms()` at call time (set `FakeClock.current_ms`, call
+  `handle_input`, assert the recorded time equals that value — the caller passes
+  no time).
 - `handle_input` is a no-op in `COUNTDOWN`, `PAUSED`, `DEMO`, `IDLE`, `FINISHED`
   (no `register_hit` recorded).
 
@@ -315,6 +373,9 @@ fakes for the three collaborators.
   stays `PLAYING`; `=7000` transitions to `FINISHED` and calls `clock.stop()`.
 - `is_finished()` True only in `FINISHED`.
 - `update` in `FINISHED` is a no-op (no further `scoring.tick`).
+- Finish time is cached: a `FakeClock` whose `stop()` resets `current_ms` to 0
+  still leaves `engine.current_ms() == 7000` after finishing (the cached
+  `_finished_ms`, not the post-stop clock value).
 
 ### Pause / resume
 
@@ -334,7 +395,7 @@ fakes for the three collaborators.
 | `src/game/engine.py` | New — `GameState`, Protocols, `GameEngine` |
 | `tests/test_input_signal.py` | New |
 | `tests/test_game_engine.py` | New |
-| `ai-working-log/DESIGN.md` | §9: replace internal `AudioPlayer`/`DemoPlayer` construction + `audio_path` with injected `Clock`/`Scoring`/`DemoSource`; document dt-accumulator countdown, clock-tail finish, and `current_ms()` scroll semantics |
+| `ai-working-log/DESIGN.md` | §9: replace internal `AudioPlayer`/`DemoPlayer` construction + `audio_path` with injected `Clock`/`Scoring`/`DemoSource` (incl. `Scoring.reset(chart)`); `handle_input(lane)` (engine stamps the time, no caller `time_ms`); replace "all notes resolved and audio done" with chart-tail finish (`total_duration_ms + END_PADDING_MS`); document dt-accumulator countdown and `current_ms()` scroll semantics (negative pre-roll, cached finish time) |
 | `TRACKING.md` | Mark Phase 2.4 status; session log entry |
 
 ## Related design issues (still deferred)
