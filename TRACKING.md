@@ -43,7 +43,7 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 
 | # | Task | Status |
 |---|------|--------|
-| 3.1 | Wire `pygame.mixer` audio: load, play, sync position to game clock | ⬜ Todo |
+| 3.1 | Wire `pygame.mixer` audio: load, play, sync position to game clock | ✅ Done |
 | 3.2 | Song selection screen (browse `songs/` directory) | ⬜ Todo |
 | 3.3 | Refactor OpenGL renderer: decouple from `Store`, fix `glDrawPixels` → pygame surface blit | ⬜ Todo |
 | 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) rendered as pygame surface over GL frame | ⬜ Todo |
@@ -65,6 +65,10 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 #### Phase 2.6 — DemoPlayer (`src/game/demo.py`)
 - `DemoPlayer(chart)` satisfies the `DemoSource` Protocol: `tick(current_ms)` pops every note whose `time_ms` has arrived as an `InputSignal(lane, note.time_ms)`, each note once, in time order. Hold notes emit a single press (release deferred).
 - `tests/test_demo_player.py` — 6 unit tests + 2 **headless end-to-end** tests: drive the full core (parser → classify → ChartBuilder → `GameEngine` demo run with real `ScoringEngine` + `DemoPlayer` + a manual clock) for both a synthetic chart and the real `twinkle.mid` fixture → score 1,000,000, accuracy 1.0, rank S. **The game core is complete and provably correct headlessly.**
+
+#### Phase 3.1 — AudioPlayer (`src/audio/player.py`, new `src/audio/` package)
+- `AudioPlayer` satisfies the `Clock` Protocol. Timing uses an injectable wall-clock source (not the backend's position query), so `current_ms()`, pause/resume exclusion, and `AUDIO_OFFSET_MS` are unit-testable headlessly. `pygame.mixer` is isolated behind an injectable backend (lazy `import pygame`), so the module imports with no audio device.
+- `tests/test_audio_player.py` — 8 tests (clock advance, pause-freeze, resume excludes paused time, offset, is_playing transitions, backend forwarding, redundant pause/resume safety).
 
 ### Session 7
 **Completed Phase 2.4 — Game Engine (brainstorm → spec → TDD)**
