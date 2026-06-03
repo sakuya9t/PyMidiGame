@@ -121,11 +121,30 @@ class TestClassifySmallestFit(unittest.TestCase):
         result = classify(events)
         self.assertEqual(result.name, '61key')
 
-    def test_notes_span_beyond_61key_returns_88key(self):
-        # Note 20 is below 88key low (21); fallback to 88key
-        events = _make_events([20, 100])
+    def test_notes_within_88key_range(self):
+        # Note 21 is the 88key low; 88key (21–108) is the smallest fit
+        events = _make_events([21, 100])
         result = classify(events)
         self.assertEqual(result.name, '88key')
+
+
+class TestClassifyRejectsOutOfRange(unittest.TestCase):
+    """Notes outside the 88-key piano range [21, 108] are rejected.
+
+    The game supports up to 88 keys, so a MIDI with any note outside this
+    range is unsupported and must fail at load time rather than silently
+    mapping to 88key (per the chart-builder design spec).
+    """
+
+    def test_note_above_108_raises(self):
+        events = _make_events([60, 109])
+        with self.assertRaises(ValueError):
+            classify(events)
+
+    def test_note_below_21_raises(self):
+        events = _make_events([20, 100])
+        with self.assertRaises(ValueError):
+            classify(events)
 
 
 class TestClassifyReturnFields(unittest.TestCase):

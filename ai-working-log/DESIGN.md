@@ -327,17 +327,49 @@ IDLE → COUNTDOWN → PLAYING → PAUSED → FINISHED
                   DEMO → FINISHED
 ```
 
-**`GameEngine`**
-- `load(chart, audio_path, demo: bool = False)`: prepare chart and audio player. If `demo=True`, also instantiate a `DemoPlayer`.
-- `start()`: begin countdown (3–2–1), then `play()` audio and enter `PLAYING` or `DEMO`.
-- `update(dt_ms)`: called every frame.
-  - In `PLAYING` or `DEMO`: read `audio.current_ms()`, call `scoring.tick()`, and collect expired notes.
-  - In `DEMO` additionally: call `demo_player.tick(audio.current_ms())` and forward each returned signal to `scoring.register_hit()` and the hit-effect system.
-- `handle_input(lane, time_ms)`: forward to `ScoringEngine.register_hit`. No-op in `DEMO` state (real input is ignored).
-- `is_demo() -> bool`: returns True when in DEMO state.
-- `is_finished() -> bool`: all notes resolved and audio done.
+**Collaborators are injected** through structural `Protocol`s — `Clock`
+(satisfied by `AudioPlayer`, §8), `Scoring` (satisfied by `ScoringEngine`, §6),
+and `DemoSource` (satisfied by `DemoPlayer`, §7). The engine never constructs
+them; a setup/factory (introduced with §8) wires the real objects in. This keeps
+the engine's single responsibility — driving state — uncoupled from audio
+decoding, scoring math, and demo generation, and lets it be unit-tested against
+fakes. (Implemented in Phase 2.4; design spec:
+`ai-working-log/specs/2026-06-02-game-engine-design.md`.)
 
-**Verification:** Simulate a two-note chart at fixed timestamps, assert notes reach `bar_y` at correct wall time. Separately, run in demo mode and assert `scoring.accuracy == 1.0` at end.
+**`GameEngine(clock, scoring, *, countdown_ms=3000, end_padding_ms=2000)`**
+- `load(chart, demo_source=None)`: bind the chart and optional demo source, call
+  `scoring.reset(chart)` (clears score/combo and binds notes), reset to `IDLE`.
+  A supplied `demo_source` selects a demo run.
+- `start()`: `IDLE → COUNTDOWN`. The clock is **not** started yet; the countdown
+  is timed by a `dt_ms` accumulator, so it works before the play clock runs.
+- `update(dt_ms)`: per-frame.
+  - `COUNTDOWN`: accumulate `dt_ms`; at `≥ countdown_ms`, `clock.play()` once and
+    enter `PLAYING` (or `DEMO`).
+  - `PLAYING`: `now = clock.current_ms()`; `scoring.tick(now)`; finish check.
+  - `DEMO`: as `PLAYING`, plus forward each `demo_source.tick(now)` signal to
+    `scoring.register_hit(sig.lane, sig.time_ms)` (signal's own time → perfect).
+- `handle_input(lane)`: forward to `scoring.register_hit(lane, clock.current_ms())`
+  **only** in `PLAYING`. The engine is the timestamp authority (raw pygame/rtmidi
+  timestamps aren't in the audio-clock domain); no-op in `DEMO` and elsewhere.
+- `pause()`/`resume()`: PLAYING/DEMO ↔ PAUSED via `clock.pause/resume`; redundant
+  calls are no-ops; resume returns to the pre-pause play state.
+- `current_ms() -> float`: scroll-position authority. Negative pre-roll in
+  `IDLE`/`COUNTDOWN`; `clock.current_ms()` in PLAYING/DEMO/PAUSED; a cached
+  finish time in `FINISHED` (so a position-resetting `clock.stop()` can't snap
+  the scroll to 0).
+- `countdown_value() -> int`: 3 → 2 → 1 for the HUD.
+- `is_demo() -> bool`: True in DEMO, stable across a pause.
+- `is_finished() -> bool`: `state == FINISHED`.
+
+**Finish semantics:** the run ends at `chart.total_duration_ms + end_padding_ms`
+(chart tail, after the last hit window closes plus a short ring-out) — **not** at
+audio-file completion. `end_padding_ms` is the per-run knob for songs needing a
+longer outro; no audio-duration contract is placed on `Clock` in v1.
+
+**Verification:** Drive the state machine against fake clock/scoring/demo
+collaborators — countdown threshold, scoring tick cadence, input stamping/gating,
+demo forwarding, finish-at-tail with cached time, pause/resume. (See
+`tests/test_game_engine.py`.)
 
 ---
 

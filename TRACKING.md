@@ -34,26 +34,106 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 |---|------|--------|
 | 2.1 | `src/midi/parser.py` — MIDI file → `NoteEvent` list (ticks → ms, tempo map) | ✅ Done |
 | 2.2 | `src/midi/classifier.py` — detect keyboard size class from note range | ✅ Done |
-| 2.3 | `src/game/chart.py` — chart builder, lane assignment, `Note`/`Chart` dataclasses | 📝 Spec drafted |
-| 2.4 | `src/game/engine.py` — game loop, state machine, scroll position | ⬜ Todo |
-| 2.5 | `src/game/scoring.py` — hit windows (PERFECT/GREAT/GOOD/MISS), score, combo | ⬜ Todo |
-| 2.6 | `src/game/demo.py` — DemoPlayer auto-hits all notes at perfect timing | ⬜ Todo |
+| 2.3 | `src/game/chart.py` — chart builder, lane assignment, `Note`/`Chart` dataclasses | ✅ Done |
+| 2.4 | `src/game/engine.py` — game loop, state machine, scroll position | ✅ Done |
+| 2.5 | `src/game/scoring.py` — hit windows (PERFECT/GREAT/GOOD/MISS), score, combo | ✅ Done |
+| 2.6 | `src/game/demo.py` — DemoPlayer auto-hits all notes at perfect timing | ✅ Done |
 
 ## Phase 3 — UI & Audio
 
 | # | Task | Status |
 |---|------|--------|
-| 3.1 | Wire `pygame.mixer` audio: load, play, sync position to game clock | ⬜ Todo |
+| 3.1 | Wire `pygame.mixer` audio: load, play, sync position to game clock | ✅ Done |
 | 3.2 | Song selection screen (browse `songs/` directory) | ⬜ Todo |
-| 3.3 | Refactor OpenGL renderer: decouple from `Store`, fix `glDrawPixels` → pygame surface blit | ⬜ Todo |
-| 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) rendered as pygame surface over GL frame | ⬜ Todo |
-| 3.5 | Results screen (grade, score, accuracy, hit breakdown) | ⬜ Todo |
+| 3.3 | Renderer (decoupled from `Store`) | 🔶 2D v1 shipped (`src/ui/renderer.py`); OpenGL perspective port pending |
+| 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) | 🔶 Done in 2D renderer; re-do as GL overlay with §13 |
+| 3.5 | Results screen (grade, score, accuracy) | 🔶 Basic overlay in 2D renderer; full screen pending |
+
+> **▶ Playable now (demo mode):** `python mania.py SONG.mid [--audio SONG.ogg]`
+> Auto-plays a perfect run (no MIDI device needed). `--play` for PC-keyboard play
+> (lanes A S D F J K L ; for ≤8 lanes), `--mode pc` for 8-lane compression,
+> Space = pause/resume, Esc = quit.
 
 ---
 
 ## Session Log
 
-### Session 5 (current)
+### Session 8 (current)
+**Autonomous run toward a playable demo: Phases 2.5, 2.6, 3.1, 3.3**
+
+#### Phase 2.5 — ScoringEngine (`src/game/scoring.py`)
+- `Judgment` enum (PERFECT/GREAT/GOOD/MISS); `ScoringEngine` satisfies the engine's `Scoring` Protocol (`reset/register_hit/tick`).
+- Hit windows ±35/±75/±120 ms; per-note `base = 1_000_000/total`, ×1.0/0.7/0.4; `accuracy = (perfect+great)/total`; rank S/A/B/C/D.
+- `register_hit` resolves the nearest unresolved note in the lane within GOOD; a stray press (no note in range) returns MISS without consuming a note or resetting combo. `tick` is the authoritative miss: a note past its GOOD window is marked missed and resets combo. Scoring owns each `Note.hit/missed` flag during a run (renderer reads them).
+- `tests/test_scoring.py` — 21 tests (windows, nearest-match, score/combo, tick timeout, accuracy/rank, full-perfect run → 1,000,000 / S, empty chart).
+
+#### Phase 2.6 — DemoPlayer (`src/game/demo.py`)
+- `DemoPlayer(chart)` satisfies the `DemoSource` Protocol: `tick(current_ms)` pops every note whose `time_ms` has arrived as an `InputSignal(lane, note.time_ms)`, each note once, in time order. Hold notes emit a single press (release deferred).
+- `tests/test_demo_player.py` — 6 unit tests + 2 **headless end-to-end** tests: drive the full core (parser → classify → ChartBuilder → `GameEngine` demo run with real `ScoringEngine` + `DemoPlayer` + a manual clock) for both a synthetic chart and the real `twinkle.mid` fixture → score 1,000,000, accuracy 1.0, rank S. **The game core is complete and provably correct headlessly.**
+
+#### Phase 3.1 — AudioPlayer (`src/audio/player.py`, new `src/audio/` package)
+- `AudioPlayer` satisfies the `Clock` Protocol. Timing uses an injectable wall-clock source (not the backend's position query), so `current_ms()`, pause/resume exclusion, and `AUDIO_OFFSET_MS` are unit-testable headlessly. `pygame.mixer` is isolated behind an injectable backend (lazy `import pygame`), so the module imports with no audio device.
+- `tests/test_audio_player.py` — 8 tests (clock advance, pause-freeze, resume excludes paused time, offset, is_playing transitions, backend forwarding, redundant pause/resume safety).
+
+#### Phase 3.3 — Renderer + entry point → **first playable** 🎉
+- **Decision:** the legacy OpenGL renderer (`ui/graph`) is tightly coupled to legacy types and the broken `glDrawPixels` HUD (§13). For a reliable, verifiable first playable, shipped a clean **pygame 2D lane renderer** instead; the OpenGL vanishing-point port (§13) remains a visual upgrade. The geometry (`lane_x`/`note_center_y`) is the same mapping a perspective renderer would project.
+- `src/ui/renderer.py` (new `src/ui/` package): `Renderer.render(target, chart, current_ms, scoring, state, countdown, is_demo)` — falling-note lanes, hit bar, HUD (score/combo/accuracy/DEMO badge), 3-2-1 countdown, results overlay (rank/score/accuracy/max-combo). Pure helpers `lane_x`, `note_center_y`.
+- `src/app.py` — wiring (`build_chart`, `make_engine`, `build_keymap`) split from the pygame `run()` loop; `mania.py` — CLI launcher (`SONG.mid [--audio] [--mode] [--play]`).
+- `tests/test_renderer.py` — 8 tests: pure geometry + a **headless** smoke (SDL dummy video/audio) that drives the fully-assembled loop (engine + scoring + demo + renderer) for a full chart → renders every frame incl. countdown & results overlays without error and finishes at 1,000,000 / accuracy 1.0.
+- **Run it:** `python mania.py tests/fixtures/twinkle.mid` → watch a perfect demo auto-play.
+
+**Suite: 211 tests, 0 failures (1 skip).**
+
+### Session 7
+**Completed Phase 2.4 — Game Engine (brainstorm → spec → TDD)**
+
+Design spec at [`ai-working-log/specs/2026-06-02-game-engine-design.md`](ai-working-log/specs/2026-06-02-game-engine-design.md). Key decisions (from brainstorming + a spec review pass):
+- **Injected collaborators** via structural `Protocol`s (`Clock`, `Scoring`, `DemoSource`) — the engine never constructs `AudioPlayer`/`ScoringEngine`/`DemoPlayer`, so 2.4 is built and tested before its dependencies (2.5/2.6/3.1) exist. Intentional deviation from DESIGN.md §9's internal-construction form; §9 updated.
+- **Countdown** timed by a `dt_ms` accumulator (clock isn't running pre-play); **FINISHED** at `chart.total_duration_ms + END_PADDING_MS` (chart tail, not audio completion).
+- `Scoring.reset(chart)` called in `load()` so reload clears score/combo and binds notes.
+- `handle_input(lane)` stamps `clock.current_ms()` itself — the engine owns the time domain so heterogeneous pygame/rtmidi timestamps can't corrupt ±35 ms judgments.
+- `current_ms()` is the single scroll authority: negative pre-roll in IDLE/COUNTDOWN; cached `_finished_ms` in FINISHED (guards against a position-resetting `clock.stop()`).
+
+New `src/input/` package:
+- `src/input/signal.py` — `InputSignal(lane, time_ms)`, the shared input currency.
+
+New `src/game/engine.py`:
+- `GameState` enum (IDLE, COUNTDOWN, PLAYING, PAUSED, DEMO, FINISHED); `Clock`/`Scoring`/`DemoSource` Protocols; `GameEngine`.
+- State machine `IDLE → COUNTDOWN → PLAYING/DEMO → FINISHED` with PAUSED off the play states; `pause`/`resume` no-op on redundant calls and preserve demo across a pause.
+- Errors: `start()`/`update()` before `load()` → `RuntimeError`; `start()` when not IDLE → `RuntimeError`.
+
+Tests:
+- `tests/test_input_signal.py` — 4 tests.
+- `tests/test_game_engine.py` — 32 tests across 6 classes (lifecycle, countdown, playing/input gating, demo forwarding, finish + cached time, pause/resume) driven against `FakeClock`/`FakeScoring`/`FakeDemoSource`.
+
+**Manual verification:** `python -m unittest discover tests` → 166 tests, 0 failures (1 skip).
+
+### Session 6
+**Completed Phase 2.3 — Chart Builder (TDD)**
+
+Implemented per [`ai-working-log/specs/2026-05-04-chart-builder-design.md`](ai-working-log/specs/2026-05-04-chart-builder-design.md), test-first.
+
+New package `src/game/` with `src/game/chart.py`:
+- `Note` dataclass: `lane`, `midi_note`, `time_ms`, `duration_ms`, `hit=False`, `missed=False`. Renderer derives world Z from `time_ms`; `Note` stores no `y`.
+- `Chart` dataclass: `notes` (non-decreasing by `time_ms`, chord notes adjacent), `kb_class`, `mode`, `lane_count`, `total_duration_ms`.
+- `ChartBuilder.build(events, kb_class, mode)`:
+  - `mode` ∉ {`"midi"`, `"pc"`} → `ValueError`.
+  - Defensive range check: any event note outside `[kb_class.midi_low, kb_class.midi_high]` → `ValueError` (both modes).
+  - `"midi"`: 1:1, `lane = note - midi_low`, `lane_count = kb_class.key_count`.
+  - `"pc"`: song range compressed onto `PC_LANE_COUNT = 8` lanes by linear interpolation; `song_min` → lane 0, `song_max` → lane 7; single-pitch song → all lane 0; half-up rounding `int(x + 0.5)` (not banker's `round()`).
+  - Empty events → empty `Chart` with correct `lane_count`, `total_duration_ms = 0.0`.
+  - Stable sort by `time_ms`; `total_duration_ms = max(time_ms + duration_ms)`.
+
+Adjacent classifier change (`src/midi/classifier.py`):
+- `classify()` no longer falls back to 88key for out-of-range notes. A note range exceeding `[21, 108]` now raises `ValueError` (the game supports up to 88 keys).
+
+Tests:
+- New `tests/test_chart_builder.py`: 36 tests across 8 classes — `Note`/`Chart` dataclasses, MIDI mode anchors & lane bounds, PC mode edge anchoring / narrow & single-pitch / mid-range / half-up-vs-banker's rounding, range validation (both modes), sort order & ties, `total_duration_ms` (incl. non-last hold note longest), mode/empty handling, classifier integration.
+- Updated `tests/test_midi_classifier.py`: replaced the 88key-fallback test with an in-range `[21, 100]` → 88key test; added `TestClassifyRejectsOutOfRange` (note 109 → `ValueError`, note 20 → `ValueError`).
+
+**Manual verification:** `python -m unittest discover tests` → 130 tests, 0 failures (1 skip).
+
+### Session 5
 **Phase 2.3 spec drafted; type-2 rejection landed**
 
 Phase 2.3 — Chart Builder design spec drafted at [`ai-working-log/specs/2026-05-04-chart-builder-design.md`](ai-working-log/specs/2026-05-04-chart-builder-design.md). Current decisions:

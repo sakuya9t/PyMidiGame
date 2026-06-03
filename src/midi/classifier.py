@@ -44,7 +44,11 @@ def classify(notes: list[NoteEvent]) -> KeyboardClass:
     """Return the smallest KeyboardClass whose range covers all notes.
 
     If the note list is empty, returns the smallest class (25key).
-    If no class fits, returns 88key as a fallback.
+
+    Raises:
+        ValueError: if the note range exceeds the supported 88-key piano
+            range [21, 108]. The game supports up to 88 keys, so any chart
+            with notes outside this range is unsupported and fails at load.
     """
     if not notes:
         return _KEYBOARD_CLASSES[0]
@@ -56,5 +60,8 @@ def classify(notes: list[NoteEvent]) -> KeyboardClass:
         if kb_class.midi_low <= min_note and max_note <= kb_class.midi_high:
             return kb_class
 
-    # Fallback: no standard class covers the range
-    return _KEYBOARD_CLASSES[-1]
+    raise ValueError(
+        f"MIDI note range [{min_note}, {max_note}] exceeds the supported "
+        f"88-key piano range [21, 108]. The game does not support charts "
+        f"with notes outside this range."
+    )
