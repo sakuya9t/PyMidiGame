@@ -2,8 +2,8 @@
 Tests for src/app.py audio source resolution.
 
 Precedence: an explicit --audio path, else a produced audio file paired with the
-MIDI by name (song.mid -> song.ogg/.mp3/.wav/.flac), else the MIDI itself
-synthesized through pygame.mixer. A load failure degrades to a silent run.
+MIDI by name (song.mid -> song.ogg/.mp3/.wav/.flac), else a temporary WAV
+preview synthesized from the MIDI. A load failure degrades to a silent run.
 """
 import sys
 import os
@@ -31,6 +31,18 @@ class FakeBackend:
     def pause(self): self.calls.append(('pause',))
     def unpause(self): self.calls.append(('unpause',))
     def stop(self): self.calls.append(('stop',))
+
+
+class FakeSynthesizer:
+    def __init__(self, raise_on_call=False):
+        self.calls = []
+        self._raise = raise_on_call
+
+    def __call__(self, midi_path, *, chart=None):
+        self.calls.append((midi_path, chart))
+        if self._raise:
+            raise RuntimeError('no synth')
+        return 'generated-preview.wav'
 
 
 class TestResolveAudioSource(unittest.TestCase):
@@ -61,21 +73,41 @@ class TestMakeAudio(unittest.TestCase):
 
     def test_loads_explicit_audio(self):
         fb = FakeBackend()
-        make_audio('song.mid', 'track.ogg', backend=fb)
+        synth = FakeSynthesizer()
+        make_audio('song.mid', 'track.ogg', backend=fb, synthesizer=synth)
         self.assertIn(('load', 'track.ogg'), fb.calls)
         self.assertNotIn(('load', 'song.mid'), fb.calls)
+        self.assertEqual(synth.calls, [])
 
-    def test_falls_back_to_midi_when_no_paired_audio(self):
-        # No sibling audio for this synthetic path -> the MIDI is loaded.
+    def test_synthesizes_midi_when_no_paired_audio(self):
+        # No sibling audio for this synthetic path -> MIDI is rendered to WAV.
         fb = FakeBackend()
-        make_audio('no_such_song.mid', None, backend=fb)
-        self.assertIn(('load', 'no_such_song.mid'), fb.calls)
+        synth = FakeSynthesizer()
+        make_audio('no_such_song.mid', None, backend=fb, synthesizer=synth)
+        self.assertEqual(synth.calls, [('no_such_song.mid', None)])
+        self.assertIn(('load', 'generated-preview.wav'), fb.calls)
+        self.assertNotIn(('load', 'no_such_song.mid'), fb.calls)
+
+    def test_synthesizer_receives_chart(self):
+        fb = FakeBackend()
+        synth = FakeSynthesizer()
+        chart = object()
+        make_audio('song.mid', None, backend=fb, chart=chart, synthesizer=synth)
+        self.assertEqual(synth.calls, [('song.mid', chart)])
 
     def test_load_failure_degrades_to_silent(self):
         fb = FakeBackend(raise_on_load=True)
-        audio = make_audio('song.mid', None, backend=fb)  # must not raise
+        synth = FakeSynthesizer()
+        audio = make_audio('song.mid', None, backend=fb, synthesizer=synth)  # must not raise
         audio.play()
         self.assertNotIn(('play',), fb.calls)  # nothing loaded -> backend untouched
+
+    def test_synthesis_failure_degrades_to_silent(self):
+        fb = FakeBackend()
+        synth = FakeSynthesizer(raise_on_call=True)
+        audio = make_audio('song.mid', None, backend=fb, synthesizer=synth)
+        audio.play()
+        self.assertEqual(fb.calls, [])
 
 
 if __name__ == '__main__':
