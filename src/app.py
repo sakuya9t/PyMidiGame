@@ -10,6 +10,9 @@ pygame loop so it can be driven headlessly in tests.
 """
 from __future__ import annotations
 
+import os
+from typing import Callable
+
 import pygame
 
 from src.midi.parser import MidiParser
@@ -49,14 +52,31 @@ def build_keymap(lane_count: int) -> dict[int, int]:
     return {key: lane for lane, key in enumerate(PC_KEYS) if lane < lane_count}
 
 
+# Produced-audio extensions tried when pairing with a MIDI, in preference order.
+AUDIO_EXTS = ('.ogg', '.mp3', '.wav', '.flac')
+
+
+def resolve_audio_source(midi_path: str, audio_path: str | None = None, *,
+                         exists: Callable[[str], bool] = os.path.exists) -> str:
+    """Choose what to play. Prefer an explicit *audio_path*; else a produced
+    audio file paired with the MIDI by name (song.mid -> song.ogg/.mp3/...);
+    else the MIDI itself (synthesized)."""
+    if audio_path:
+        return audio_path
+    stem, _ = os.path.splitext(midi_path)
+    for ext in AUDIO_EXTS:
+        candidate = stem + ext
+        if exists(candidate):
+            return candidate
+    return midi_path
+
+
 def make_audio(midi_path: str, audio_path: str | None = None, *,
                backend=None) -> AudioPlayer:
-    """Prepare the audio player. The MIDI file is the music by default
-    (pygame.mixer synthesizes a .mid); *audio_path* overrides it with a produced
-    track. A load failure degrades to a silent run rather than crashing.
-    """
+    """Prepare the audio player from the resolved source (see
+    resolve_audio_source). A load failure degrades to a silent run."""
     audio = AudioPlayer(backend=backend)
-    source = audio_path or midi_path
+    source = resolve_audio_source(midi_path, audio_path)
     try:
         audio.load(source)
     except Exception as exc:  # no MIDI backend / unreadable file -> play silent
