@@ -49,6 +49,21 @@ def build_keymap(lane_count: int) -> dict[int, int]:
     return {key: lane for lane, key in enumerate(PC_KEYS) if lane < lane_count}
 
 
+def make_audio(midi_path: str, audio_path: str | None = None, *,
+               backend=None) -> AudioPlayer:
+    """Prepare the audio player. The MIDI file is the music by default
+    (pygame.mixer synthesizes a .mid); *audio_path* overrides it with a produced
+    track. A load failure degrades to a silent run rather than crashing.
+    """
+    audio = AudioPlayer(backend=backend)
+    source = audio_path or midi_path
+    try:
+        audio.load(source)
+    except Exception as exc:  # no MIDI backend / unreadable file -> play silent
+        print(f"[MidiMania] audio unavailable, running silent: {exc}")
+    return audio
+
+
 def run(midi_path: str, audio_path: str | None = None, *,
         demo: bool = True, mode: str = 'midi') -> None:
     """Launch the windowed game loop. Blocks until the window is closed."""
@@ -57,9 +72,7 @@ def run(midi_path: str, audio_path: str | None = None, *,
     pygame.display.set_caption('MidiMania')
 
     chart = build_chart(midi_path, mode)
-    audio = AudioPlayer()
-    if audio_path:
-        audio.load(audio_path)
+    audio = make_audio(midi_path, audio_path)
 
     engine, scoring = make_engine(chart, audio, demo=demo)
     renderer = Renderer(SIZE)
