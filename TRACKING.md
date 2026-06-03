@@ -37,7 +37,7 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 | 2.3 | `src/game/chart.py` — chart builder, lane assignment, `Note`/`Chart` dataclasses | ✅ Done |
 | 2.4 | `src/game/engine.py` — game loop, state machine, scroll position | ✅ Done |
 | 2.5 | `src/game/scoring.py` — hit windows (PERFECT/GREAT/GOOD/MISS), score, combo | ✅ Done |
-| 2.6 | `src/game/demo.py` — DemoPlayer auto-hits all notes at perfect timing | ⬜ Todo |
+| 2.6 | `src/game/demo.py` — DemoPlayer auto-hits all notes at perfect timing | ✅ Done |
 
 ## Phase 3 — UI & Audio
 
@@ -61,6 +61,10 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 - Hit windows ±35/±75/±120 ms; per-note `base = 1_000_000/total`, ×1.0/0.7/0.4; `accuracy = (perfect+great)/total`; rank S/A/B/C/D.
 - `register_hit` resolves the nearest unresolved note in the lane within GOOD; a stray press (no note in range) returns MISS without consuming a note or resetting combo. `tick` is the authoritative miss: a note past its GOOD window is marked missed and resets combo. Scoring owns each `Note.hit/missed` flag during a run (renderer reads them).
 - `tests/test_scoring.py` — 21 tests (windows, nearest-match, score/combo, tick timeout, accuracy/rank, full-perfect run → 1,000,000 / S, empty chart).
+
+#### Phase 2.6 — DemoPlayer (`src/game/demo.py`)
+- `DemoPlayer(chart)` satisfies the `DemoSource` Protocol: `tick(current_ms)` pops every note whose `time_ms` has arrived as an `InputSignal(lane, note.time_ms)`, each note once, in time order. Hold notes emit a single press (release deferred).
+- `tests/test_demo_player.py` — 6 unit tests + 2 **headless end-to-end** tests: drive the full core (parser → classify → ChartBuilder → `GameEngine` demo run with real `ScoringEngine` + `DemoPlayer` + a manual clock) for both a synthetic chart and the real `twinkle.mid` fixture → score 1,000,000, accuracy 1.0, rank S. **The game core is complete and provably correct headlessly.**
 
 ### Session 7
 **Completed Phase 2.4 — Game Engine (brainstorm → spec → TDD)**
