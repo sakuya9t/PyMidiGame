@@ -35,7 +35,7 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 | 2.1 | `src/midi/parser.py` — MIDI file → `NoteEvent` list (ticks → ms, tempo map) | ✅ Done |
 | 2.2 | `src/midi/classifier.py` — detect keyboard size class from note range | ✅ Done |
 | 2.3 | `src/game/chart.py` — chart builder, lane assignment, `Note`/`Chart` dataclasses | ✅ Done |
-| 2.4 | `src/game/engine.py` — game loop, state machine, scroll position | ⬜ Todo |
+| 2.4 | `src/game/engine.py` — game loop, state machine, scroll position | ✅ Done |
 | 2.5 | `src/game/scoring.py` — hit windows (PERFECT/GREAT/GOOD/MISS), score, combo | ⬜ Todo |
 | 2.6 | `src/game/demo.py` — DemoPlayer auto-hits all notes at perfect timing | ⬜ Todo |
 
@@ -53,7 +53,31 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 
 ## Session Log
 
-### Session 6 (current)
+### Session 7 (current)
+**Completed Phase 2.4 — Game Engine (brainstorm → spec → TDD)**
+
+Design spec at [`ai-working-log/specs/2026-06-02-game-engine-design.md`](ai-working-log/specs/2026-06-02-game-engine-design.md). Key decisions (from brainstorming + a spec review pass):
+- **Injected collaborators** via structural `Protocol`s (`Clock`, `Scoring`, `DemoSource`) — the engine never constructs `AudioPlayer`/`ScoringEngine`/`DemoPlayer`, so 2.4 is built and tested before its dependencies (2.5/2.6/3.1) exist. Intentional deviation from DESIGN.md §9's internal-construction form; §9 updated.
+- **Countdown** timed by a `dt_ms` accumulator (clock isn't running pre-play); **FINISHED** at `chart.total_duration_ms + END_PADDING_MS` (chart tail, not audio completion).
+- `Scoring.reset(chart)` called in `load()` so reload clears score/combo and binds notes.
+- `handle_input(lane)` stamps `clock.current_ms()` itself — the engine owns the time domain so heterogeneous pygame/rtmidi timestamps can't corrupt ±35 ms judgments.
+- `current_ms()` is the single scroll authority: negative pre-roll in IDLE/COUNTDOWN; cached `_finished_ms` in FINISHED (guards against a position-resetting `clock.stop()`).
+
+New `src/input/` package:
+- `src/input/signal.py` — `InputSignal(lane, time_ms)`, the shared input currency.
+
+New `src/game/engine.py`:
+- `GameState` enum (IDLE, COUNTDOWN, PLAYING, PAUSED, DEMO, FINISHED); `Clock`/`Scoring`/`DemoSource` Protocols; `GameEngine`.
+- State machine `IDLE → COUNTDOWN → PLAYING/DEMO → FINISHED` with PAUSED off the play states; `pause`/`resume` no-op on redundant calls and preserve demo across a pause.
+- Errors: `start()`/`update()` before `load()` → `RuntimeError`; `start()` when not IDLE → `RuntimeError`.
+
+Tests:
+- `tests/test_input_signal.py` — 4 tests.
+- `tests/test_game_engine.py` — 32 tests across 6 classes (lifecycle, countdown, playing/input gating, demo forwarding, finish + cached time, pause/resume) driven against `FakeClock`/`FakeScoring`/`FakeDemoSource`.
+
+**Manual verification:** `python -m unittest discover tests` → 166 tests, 0 failures (1 skip).
+
+### Session 6
 **Completed Phase 2.3 — Chart Builder (TDD)**
 
 Implemented per [`ai-working-log/specs/2026-05-04-chart-builder-design.md`](ai-working-log/specs/2026-05-04-chart-builder-design.md), test-first.
