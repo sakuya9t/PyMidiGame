@@ -36,7 +36,7 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 | 2.2 | `src/midi/classifier.py` — detect keyboard size class from note range | ✅ Done |
 | 2.3 | `src/game/chart.py` — chart builder, lane assignment, `Note`/`Chart` dataclasses | ✅ Done |
 | 2.4 | `src/game/engine.py` — game loop, state machine, scroll position | ✅ Done |
-| 2.5 | `src/game/scoring.py` — hit windows (PERFECT/GREAT/GOOD/MISS), score, combo | ⬜ Todo |
+| 2.5 | `src/game/scoring.py` — hit windows (PERFECT/GREAT/GOOD/MISS), score, combo | ✅ Done |
 | 2.6 | `src/game/demo.py` — DemoPlayer auto-hits all notes at perfect timing | ⬜ Todo |
 
 ## Phase 3 — UI & Audio
@@ -53,7 +53,16 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 
 ## Session Log
 
-### Session 7 (current)
+### Session 8 (current)
+**Autonomous run toward a playable demo: Phases 2.5, 2.6, 3.1, 3.3**
+
+#### Phase 2.5 — ScoringEngine (`src/game/scoring.py`)
+- `Judgment` enum (PERFECT/GREAT/GOOD/MISS); `ScoringEngine` satisfies the engine's `Scoring` Protocol (`reset/register_hit/tick`).
+- Hit windows ±35/±75/±120 ms; per-note `base = 1_000_000/total`, ×1.0/0.7/0.4; `accuracy = (perfect+great)/total`; rank S/A/B/C/D.
+- `register_hit` resolves the nearest unresolved note in the lane within GOOD; a stray press (no note in range) returns MISS without consuming a note or resetting combo. `tick` is the authoritative miss: a note past its GOOD window is marked missed and resets combo. Scoring owns each `Note.hit/missed` flag during a run (renderer reads them).
+- `tests/test_scoring.py` — 21 tests (windows, nearest-match, score/combo, tick timeout, accuracy/rank, full-perfect run → 1,000,000 / S, empty chart).
+
+### Session 7
 **Completed Phase 2.4 — Game Engine (brainstorm → spec → TDD)**
 
 Design spec at [`ai-working-log/specs/2026-06-02-game-engine-design.md`](ai-working-log/specs/2026-06-02-game-engine-design.md). Key decisions (from brainstorming + a spec review pass):
