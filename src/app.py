@@ -11,6 +11,7 @@ pygame loop so it can be driven headlessly in tests.
 from __future__ import annotations
 
 import os
+from enum import Enum, auto
 from typing import Callable
 
 import pygame
@@ -24,6 +25,7 @@ from src.game.demo import DemoPlayer
 from src.audio.player import AudioPlayer
 from src.audio.synth import synthesize_midi_to_wav
 from src.ui.renderer import Renderer
+from src.ui.menu import scan_songs, SongMenu, SongEntry, StartGame, QuitGame
 
 SIZE = (960, 720)
 
@@ -137,3 +139,170 @@ def run(midi_path: str, audio_path: str | None = None, *,
         pygame.display.flip()
 
     pygame.quit()
+
+
+# --- App: menu -> play -> results -> menu loop -----------------------------
+
+class AppScreen(Enum):
+    MENU = auto()
+    PLAYING = auto()
+    RESULTS = auto()
+
+
+class App:
+    """Top-level state machine owning the window and the screen loop.
+
+    Screens (AppScreen): MENU (SongMenu), PLAYING (GameEngine + Renderer), and
+    RESULTS (the renderer's FINISHED overlay). The per-frame logic lives in
+    handle_event/update/render/step so it can be driven headlessly in tests; run()
+    wraps step() with the real pygame event pump and display flip.
+
+    audio_factory(entry, chart) -> Clock is injectable so tests can supply a
+    manual clock; it defaults to the make_audio pipeline (produced audio, else a
+    synthesized MIDI preview, else silent).
+    """
+
+    def __init__(self, songs_dir: str = 'songs', size: tuple[int, int] = SIZE, *,
+                 surface: pygame.Surface | None = None,
+                 scan: Callable[[str], list[SongEntry]] = scan_songs,
+                 audio_factory: Callable[[SongEntry, Chart], object] | None = None) -> None:
+        self._songs_dir = songs_dir
+        self._size = size
+        self._songs = scan(songs_dir)
+        self._menu = SongMenu(self._songs, size)
+        self._renderer = Renderer(size)
+        self._surface = surface
+        self._audio_factory = audio_factory or self._default_audio
+        self._screen = AppScreen.MENU
+        self._engine: GameEngine | None = None
+        self._scoring: ScoringEngine | None = None
+        self._chart: Chart | None = None
+        self._keymap: dict[int, int] = {}
+        self._selection: tuple[SongEntry, str] | None = None
+        self._running = True
+
+    # --- queries -----------------------------------------------------------
+
+    @property
+    def screen(self) -> AppScreen:
+        return self._screen
+
+    @property
+    def songs(self) -> list[SongEntry]:
+        return self._songs
+
+    @property
+    def engine(self) -> GameEngine | None:
+        return self._engine
+
+    @property
+    def scoring(self) -> ScoringEngine | None:
+        return self._scoring
+
+    @property
+    def chart(self) -> Chart | None:
+        return self._chart
+
+    def _default_audio(self, entry: SongEntry, chart: Chart):
+        return make_audio(entry.midi_path, entry.audio_path, chart=chart)
+
+    # --- transitions -------------------------------------------------------
+
+    def start_game(self, entry: SongEntry, input_mode: str) -> None:
+        """Load *entry* and enter PLAYING. PC Keyboard plays compressed lanes
+        ('pc'); Demo auto-plays the full-fidelity layout ('midi')."""
+        demo = input_mode == 'demo'
+        chart_mode = 'midi' if demo else 'pc'
+        self._chart = build_chart(entry.midi_path, chart_mode)
+        clock = self._audio_factory(entry, self._chart)
+        self._engine, self._scoring = make_engine(self._chart, clock, demo=demo)
+        self._keymap = build_keymap(self._chart.lane_count)
+        self._selection = (entry, input_mode)
+        self._engine.start()
+        self._screen = AppScreen.PLAYING
+
+    def to_menu(self) -> None:
+        self._screen = AppScreen.MENU
+
+    def retry(self) -> None:
+        entry, input_mode = self._selection
+        self.start_game(entry, input_mode)
+
+    # --- per-frame ---------------------------------------------------------
+
+    def handle_event(self, event) -> None:
+        if self._screen is AppScreen.MENU:
+            self._handle_menu(event)
+        elif self._screen is AppScreen.PLAYING:
+            self._handle_playing(event)
+        elif self._screen is AppScreen.RESULTS:
+            self._handle_results(event)
+
+    def _handle_menu(self, event) -> None:
+        action = self._menu.handle_event(event)
+        if isinstance(action, StartGame):
+            self.start_game(action.entry, action.input_mode)
+        elif isinstance(action, QuitGame):
+            self._running = False
+
+    def _handle_playing(self, event) -> None:
+        if event.type != pygame.KEYDOWN:
+            return
+        if event.key == pygame.K_ESCAPE:
+            self.to_menu()
+        elif event.key == pygame.K_p:
+            if self._engine.state.name == 'PAUSED':
+                self._engine.resume()
+            else:
+                self._engine.pause()
+        elif not self._engine.is_demo() and event.key in self._keymap:
+            self._engine.handle_input(self._keymap[event.key])
+
+    def _handle_results(self, event) -> None:
+        if event.type != pygame.KEYDOWN:
+            return
+        if event.key == pygame.K_r:
+            self.retry()
+        elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_ESCAPE):
+            self.to_menu()
+
+    def update(self, dt_ms: float) -> None:
+        if self._screen is AppScreen.PLAYING:
+            self._engine.update(dt_ms)
+            if self._engine.is_finished():
+                self._screen = AppScreen.RESULTS
+
+    def render(self) -> None:
+        if self._surface is None:
+            return
+        if self._screen is AppScreen.MENU:
+            self._menu.render(self._surface)
+        else:
+            self._renderer.render(
+                self._surface, self._chart, self._engine.current_ms(),
+                self._scoring, state=self._engine.state,
+                countdown=self._engine.countdown_value(),
+                is_demo=self._engine.is_demo())
+
+    def step(self, dt_ms: float, events) -> bool:
+        """Advance one frame over *events*; returns whether the app keeps running."""
+        for event in events:
+            if event.type == pygame.QUIT:
+                self._running = False
+            else:
+                self.handle_event(event)
+        self.update(dt_ms)
+        self.render()
+        return self._running
+
+    def run(self) -> None:
+        """Open the window and run the menu->play->results loop until quit."""
+        pygame.init()
+        self._surface = pygame.display.set_mode(self._size)
+        pygame.display.set_caption('MidiMania')
+        frame_clock = pygame.time.Clock()
+        while self._running:
+            dt_ms = frame_clock.tick(60)
+            self.step(dt_ms, pygame.event.get())
+            pygame.display.flip()
+        pygame.quit()
