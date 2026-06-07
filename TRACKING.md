@@ -44,21 +44,65 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 | # | Task | Status |
 |---|------|--------|
 | 3.1 | Wire `pygame.mixer` audio: load, play, sync position to game clock | ✅ Done |
-| 3.2 | Song selection screen (browse `songs/` directory) | ⬜ Todo |
+| 3.2 | Song selection screen (browse `songs/` directory) + menu→play→results loop | ✅ Done |
 | 3.3 | Renderer (decoupled from `Store`) | 🔶 2D v1 shipped (`src/ui/renderer.py`); OpenGL perspective port pending |
 | 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) | 🔶 Done in 2D renderer; re-do as GL overlay with §13 |
-| 3.5 | Results screen (grade, score, accuracy) | 🔶 Basic overlay in 2D renderer; full screen pending |
+| 3.5 | Results screen (grade, score, accuracy) | 🔶 Overlay reused by the RESULTS screen; full standalone screen pending |
 
-> **▶ Playable now (demo mode):** `python mania.py SONG.mid [--audio SONG.ogg]`
-> Auto-plays a perfect run (no MIDI device needed). `--play` for PC-keyboard play
-> (lanes A S D F J K L ; for ≤8 lanes), `--mode pc` for 8-lane compression,
-> Space = pause/resume, Esc = quit.
+> **▶ Playable now:** `python mania.py` opens the **song-selection menu** over
+> `songs/` (↑↓ pick song · ←→ choose PC Keyboard / Demo, MIDI greyed-out · Enter
+> play · Esc quit; after a song, Enter→menu, R→retry). `python mania.py SONG.mid`
+> still plays one chart directly (`--play` for PC keyboard, `--mode pc`, Space =
+> pause, Esc = back to menu).
 
 ---
 
 ## Session Log
 
-### Session 8 (current)
+### Session 9 (current)
+**Completed Phase 3.2 — Song selection screen + app-flow loop (brainstorm → spec → TDD)**
+
+Design spec at [`ai-working-log/specs/2026-06-06-song-select-design.md`](ai-working-log/specs/2026-06-06-song-select-design.md).
+The game is no longer a per-song CLI launcher: `python mania.py` opens a browsable
+menu and runs the full **MENU → PLAYING → RESULTS → MENU** loop in one window.
+
+New `src/ui/menu.py`:
+- `scan_songs(songs_dir)` → sorted `list[SongEntry]` (name, paths, title, artist,
+  classified `key_class`, duration, bpm). Per-song folder = a `chart.mid` (or first
+  `*.mid`) + optional `meta.json` + optional produced audio sibling. A folder with
+  no chart, or a MIDI that won't parse/classify, is **skipped, not fatal**.
+- `SongMenu`: ↑↓ select (clamped), ←→ cycle input mode over `SELECTABLE_MODES =
+  ('pc','demo')` (MIDI Keyboard shown but **greyed-out** — device input is a later
+  thread), Enter → `StartGame(entry, input_mode)`, Esc → `QuitGame`. Renders to a
+  pygame surface (empty-library state included).
+
+`src/app.py` — new `App` + `AppScreen` (MENU/PLAYING/RESULTS):
+- `start_game(entry, input_mode)`: PC → `pc` lane mode (real play); Demo → `midi`
+  mode (auto-play). Builds chart → audio (injectable `audio_factory`) → engine →
+  keymap, stores the selection for retry, enters PLAYING.
+- Frame logic split into `handle_event/update/render/step` (headless-drivable);
+  `run()` wraps `step()` with the real pygame pump. PLAYING: Esc→menu, P→pause,
+  lane keys→`handle_input` (non-demo). RESULTS reuses the renderer's FINISHED
+  overlay; R→retry, Enter/Esc→menu. `update` flips PLAYING→RESULTS on
+  `engine.is_finished()`.
+- `mania.py`: no positional arg (or `--songs DIR`) opens the menu; `SONG.mid` still
+  plays one chart directly.
+
+Seeded `songs/`: `twinkle/` (Greensleeves) and `bach-cello/` (Bach Cello Suite),
+each `chart.mid` (from the test fixtures) + `meta.json`. Audio via the existing
+MIDI-synth WAV fallback (no produced tracks shipped).
+
+Tests (TDD, headless under SDL dummy drivers):
+- `tests/test_song_menu.py` — 22 tests: scanner (skip/override/defaults/sort/audio
+  resolution/malformed-skip/empty) + `SongMenu` navigation, mode cycling, actions,
+  empty-library no-op, render smoke.
+- `tests/test_app_flow.py` — 11 tests: screen transitions, PC-vs-demo lane mode,
+  a full demo run fast-forwarded (injected manual clock) to RESULTS at 1,000,000 /
+  acc 1.0, retry replays with a fresh clock, QUIT stops `step`, per-screen render.
+
+**Suite: 260 tests, 0 failures (1 skip).**
+
+### Session 8
 **Autonomous run toward a playable demo: Phases 2.5, 2.6, 3.1, 3.3**
 
 #### Phase 2.5 — ScoringEngine (`src/game/scoring.py`)
