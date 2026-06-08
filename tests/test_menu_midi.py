@@ -59,6 +59,21 @@ class WithDeviceTest(unittest.TestCase):
     def test_midi_is_selectable(self):
         self.assertIn('midi', self.m.selectable_modes)
 
+    def test_selection_order_matches_display_order(self):
+        # Displayed left-to-right as PC, MIDI, Demo; arrows must step that way.
+        self.assertEqual(self.m.selectable_modes, ['pc', 'midi', 'demo'])
+
+    def test_right_arrow_moves_to_next_displayed_mode(self):
+        self.assertEqual(self.m.input_mode, 'pc')
+        self.m.handle_event(_key(pygame.K_RIGHT))
+        self.assertEqual(self.m.input_mode, 'midi')
+        self.m.handle_event(_key(pygame.K_RIGHT))
+        self.assertEqual(self.m.input_mode, 'demo')
+
+    def test_left_arrow_from_pc_wraps_to_demo(self):
+        self.m.handle_event(_key(pygame.K_LEFT))
+        self.assertEqual(self.m.input_mode, 'demo')
+
     def test_keys_options_limited_to_span(self):
         self.assertEqual(self.m.keys_options,
                          ['auto', '25key', '32key', '37key', '49key'])

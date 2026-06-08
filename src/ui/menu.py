@@ -201,12 +201,13 @@ class SongMenu:
 
     @property
     def selectable_modes(self) -> list[str]:
-        """Input modes the player can pick now. MIDI appears once a device is
-        configured (see set_midi_config)."""
-        modes = list(SELECTABLE_MODES)
+        """Input modes the player can pick now, in left-to-right display order
+        (_DISPLAY_MODES) so the ←→ arrows match the on-screen layout. MIDI
+        appears once a device is configured (see set_midi_config)."""
+        available = set(SELECTABLE_MODES)
         if self.midi_config is not None:
-            modes.append('midi')
-        return modes
+            available.add('midi')
+        return [m for m in _DISPLAY_MODES if m in available]
 
     @property
     def input_mode(self) -> str:

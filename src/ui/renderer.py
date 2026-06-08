@@ -50,19 +50,30 @@ _FOV_Y = 50.0
 # --- colors (RGBA, 0..1) ---------------------------------------------------
 _BG = (0.015, 0.03, 0.07, 1.0)
 _BOARD = (0.03, 0.05, 0.10, 1.0)
-_LANE_TINT = (1.0, 1.0, 1.0, 0.60)
-_DIVIDER = (0.55, 0.78, 1.0, 0.5)
-_CENTER_DIVIDER = (1.0, 0.30, 0.42, 0.85)
+_LANE_WHITE = (0.88, 0.91, 0.98, 0.62)   # white (natural) key lane
+_LANE_BLACK = (0.10, 0.34, 0.85, 0.70)   # black (accidental) key lane -> blue
+_DIVIDER = (0.20, 0.27, 0.42, 0.45)      # subtle, so lane fills read clearly
 _HOLD_TINT = (1.0, 1.0, 1.0, 0.85)
 _NOTE_TINT = (1.0, 1.0, 1.0, 1.0)
 _NOTE_HIT = (0.35, 0.95, 0.65, 1.0)
 _NOTE_MISS = (0.42, 0.20, 0.28, 0.7)
 
+# MIDI pitch classes of the black keys (C#, D#, F#, G#, A#).
+_BLACK_KEYS = frozenset({1, 3, 6, 8, 10})
 
-def _lane_family(lane: int, lane_count: int) -> str:
-    """Atlas color family for a lane (mirrors the 2D renderer's lane coloring)."""
-    if lane_count % 2 == 1 and lane == lane_count // 2:
-        return 'red'
+
+def is_black_key(note: int) -> bool:
+    """Whether a MIDI note is a black (accidental) piano key."""
+    return note % 12 in _BLACK_KEYS
+
+
+def lane_family(lane: int, mode: str, midi_low: int) -> str:
+    """Atlas color family for a lane. In 1:1 'midi' mode each lane is a piano
+    key: white keys -> 'white', black keys -> 'blue' (so the board reads like a
+    keyboard). In compressed 'pc' mode lanes don't map to keys, so alternate
+    white/blue. Never red."""
+    if mode == 'midi':
+        return 'blue' if is_black_key(midi_low + lane) else 'white'
     return 'blue' if lane % 2 == 0 else 'white'
 
 
@@ -87,7 +98,7 @@ class Renderer:
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
         self._draw_board()
-        self._draw_lanes(chart.lane_count)
+        self._draw_lanes(chart)
         self._draw_hit_bar()
         self._draw_notes(chart, current_ms)
 
@@ -110,22 +121,25 @@ class Renderer:
             glVertex3f(*v)
         glEnd()
 
-    def _draw_lanes(self, lane_count: int) -> None:
+    def _draw_lanes(self, chart: Chart) -> None:
+        lane_count = chart.lane_count
+        midi_low = chart.kb_class.midi_low
         for lane in range(lane_count):
             left, right = geometry.lane_bounds_world(lane, lane_count,
                                                      BOARD_LEFT, BOARD_RIGHT)
-            family = _lane_family(lane, lane_count)
+            # Flat key colors read clearly even at 49+ thin lanes; notes and the
+            # hit bar stay textured. White keys -> light, black keys -> blue.
+            black = lane_family(lane, chart.mode, midi_low) == 'blue'
             self._textured_quad(
                 _flat_quad(left, right, BOARD_FAR_Z, BOARD_NEAR_Z, y=0.01),
-                self._atlas.uv(family, 'lane'), _LANE_TINT)
+                None, _LANE_BLACK if black else _LANE_WHITE)
 
-        # Lane dividers.
+        # Lane dividers (uniform; no special center lane).
         glLineWidth(1.5)
+        glColor4f(*_DIVIDER)
         glBegin(GL_LINES)
         for i in range(lane_count + 1):
             x = BOARD_LEFT + (BOARD_RIGHT - BOARD_LEFT) * i / lane_count
-            center = lane_count % 2 == 1 and i in (lane_count // 2, lane_count // 2 + 1)
-            glColor4f(*(_CENTER_DIVIDER if center else _DIVIDER))
             glVertex3f(x, 0.02, BOARD_FAR_Z)
             glVertex3f(x, 0.02, BOARD_NEAR_Z)
         glEnd()
@@ -142,7 +156,7 @@ class Renderer:
                                                      BOARD_LEFT, BOARD_RIGHT)
             inset = (right - left) * 0.12
             left, right = left + inset, right - inset
-            family = _lane_family(note.lane, chart.lane_count)
+            family = lane_family(note.lane, chart.mode, chart.kb_class.midi_low)
 
             if note.duration_ms > 0:
                 tail_z = HIT_Z - geometry.note_z(note.time_ms + note.duration_ms,
