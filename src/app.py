@@ -40,7 +40,7 @@ from src.ui.menu import (
     scan_songs, SongMenu, SongEntry, StartGame, QuitGame, OpenMidiSetup, MidiConfig,
 )
 
-SIZE = (960, 720)
+SIZE = (1366, 768)  # 16:9
 
 
 def _open_gl_window(size: tuple[int, int]) -> pygame.Surface:

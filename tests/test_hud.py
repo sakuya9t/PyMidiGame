@@ -21,7 +21,7 @@ from src.ui.hud import HudOverlay
 from src.ui.materials import NeonMaterialKit
 from src.game.engine import GameState
 
-SIZE = (960, 720)
+SIZE = (1366, 768)
 
 
 class TestMaterialAtlas(unittest.TestCase):

@@ -20,7 +20,7 @@ import pygame
 from src.ui.results import ResultsScreen
 from src.ui.menu import SongEntry
 
-SIZE = (960, 720)
+SIZE = (1366, 768)
 
 
 class FakeScoring:
