@@ -73,7 +73,33 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 
 ## Session Log
 
-### Session 11 (current)
+### Session 12 (current)
+**Legacy codebase removal — the rewrite is now self-contained**
+
+With Phases 1–4 complete, `mania.py` → `src/` is the whole game, and the original
+2020 PyMidiGame sources were dead weight (some last touched only by the Phase 1
+shims). Verified nothing under `src/`, `tests/`, or `mania.py` imports them, then
+deleted the legacy set (28 files):
+- **Top-level modules:** `main.py`, `window.py`, `constants.py`, `MidiControl.py`,
+  `InputQueue.py`, `KeyMapper.py`, `KeyCodeConstants.py`, `midis2events.py`.
+- **Legacy packages:** `controllers/`, `ui/` (incl. `graph/`, `scenes/`,
+  `ui_layout.json`), `config/`, `settings/`, `midi/` (the old `MusicPlayer`, **not**
+  `src/midi/`), `logger/`, `Mp3Player/`.
+- **Legacy test:** `tests/test_midis2events.py` (the Phase 1.2 rtmidi-shim test —
+  the only `tests/` file that reached into legacy code; it held the lone
+  "pre-existing" skip).
+- **Resources:** kept `resources/ui/neon_texture_atlas.png` (used by
+  `src/ui/atlas.py`). The two stray MIDIs were **not** discarded — they parse and
+  classify, so they were promoted into the playable library: `resources/chords.mid`
+  → `songs/chords/chart.mid` (49key, ~7 s) and `resources/平和な日々.mid` →
+  `songs/heiwa-na-hibi/chart.mid` (37key, ~150 s), each with a `meta.json` title.
+  `scan_songs('songs')` now lists all four songs.
+
+**Suite: 323 tests headless, 0 failures, 8 skip (= the 8 GL smoke tests, which
+need a real OpenGL context).** No source changes were needed — the new code never
+depended on the legacy tree.
+
+### Session 11
 **MIDI device input — play with a real keyboard (Phase 4)**
 
 Design spec at [`ai-working-log/specs/2026-06-07-midi-device-input-design.md`](ai-working-log/specs/2026-06-07-midi-device-input-design.md).
