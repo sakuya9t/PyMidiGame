@@ -375,6 +375,14 @@ demo forwarding, finish-at-tail with cached time, pause/resume. (See
 
 ### 10. `src/midi/device.py` — MIDI Device I/O
 
+> **Implemented (Phase 4, Session 11).** See
+> [`ai-working-log/specs/2026-06-07-midi-device-input-design.md`](specs/2026-06-07-midi-device-input-design.md).
+> The implementation uses **frame polling** (`MidiInputDevice.poll()` drains
+> `get_message()` each frame), not a background-thread callback queue — simpler
+> and thread-safe; a callback upgrade for tighter timing is noted as future work.
+> Adapter is `src/input/midi_input.py`; device selection + span calibration is
+> `src/ui/midi_setup.py` (a MIDI port can't report its key count).
+
 **Purpose:** Enumerate, open, and stream real-time MIDI messages from a physical MIDI keyboard.
 
 **`MidiDeviceManager`**

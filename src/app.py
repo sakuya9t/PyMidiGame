@@ -20,7 +20,9 @@ from OpenGL.GL import (
 )
 
 from src.midi.parser import MidiParser
-from src.midi.classifier import classify
+from src.midi.classifier import classify, keyboard_class_by_name, KeyboardClass
+from src.midi.device import MidiInputDevice, list_input_ports
+from src.input.midi_input import MidiInput
 from src.game.chart import Chart, ChartBuilder
 from src.game.engine import GameEngine
 from src.game.scoring import ScoringEngine
@@ -31,7 +33,12 @@ from src.ui.renderer import Renderer
 from src.ui.hud import HudOverlay
 from src.ui.results import ResultsScreen
 from src.ui.gl_overlay import SurfacePresenter
-from src.ui.menu import scan_songs, SongMenu, SongEntry, StartGame, QuitGame
+from src.ui.midi_setup import (
+    MidiSetup, OpenDevice, MidiConfigured, CancelSetup,
+)
+from src.ui.menu import (
+    scan_songs, SongMenu, SongEntry, StartGame, QuitGame, OpenMidiSetup, MidiConfig,
+)
 
 SIZE = (960, 720)
 
@@ -53,10 +60,13 @@ PC_KEYS = [pygame.K_a, pygame.K_s, pygame.K_d, pygame.K_f,
            pygame.K_j, pygame.K_k, pygame.K_l, pygame.K_SEMICOLON]
 
 
-def build_chart(midi_path: str, mode: str = 'midi') -> Chart:
-    """Parse, classify, and build a chart from a .mid file."""
+def build_chart(midi_path: str, mode: str = 'midi',
+                kb_override: KeyboardClass | None = None) -> Chart:
+    """Parse, classify, and build a chart from a .mid file. *kb_override* forces
+    a keyboard class (e.g. the player's MIDI keyboard size) instead of
+    classifying the song's own range."""
     events = MidiParser.parse(midi_path)
-    kb = classify(events)
+    kb = kb_override if kb_override is not None else classify(events)
     return ChartBuilder.build(events, kb, mode)
 
 
@@ -168,6 +178,13 @@ class AppScreen(Enum):
     MENU = auto()
     PLAYING = auto()
     RESULTS = auto()
+    MIDI_SETUP = auto()
+
+
+def _open_real_midi(index: int) -> MidiInputDevice:
+    dev = MidiInputDevice()
+    dev.open(index)
+    return dev
 
 
 class App:
@@ -186,7 +203,9 @@ class App:
     def __init__(self, songs_dir: str = 'songs', size: tuple[int, int] = SIZE, *,
                  surface: pygame.Surface | None = None,
                  scan: Callable[[str], list[SongEntry]] = scan_songs,
-                 audio_factory: Callable[[SongEntry, Chart], object] | None = None) -> None:
+                 audio_factory: Callable[[SongEntry, Chart], object] | None = None,
+                 ports_provider: Callable[[], list[str]] = list_input_ports,
+                 midi_device_factory: Callable[[int], object] = _open_real_midi) -> None:
         self._songs_dir = songs_dir
         self._size = size
         self._songs = scan(songs_dir)
@@ -198,13 +217,22 @@ class App:
         self._surface = surface
         self._gl = False  # set True once run() opens a real OpenGL window
         self._audio_factory = audio_factory or self._default_audio
+        self._ports_provider = ports_provider
+        self._midi_device_factory = midi_device_factory
         self._screen = AppScreen.MENU
         self._engine: GameEngine | None = None
         self._scoring: ScoringEngine | None = None
         self._chart: Chart | None = None
         self._keymap: dict[int, int] = {}
-        self._selection: tuple[SongEntry, str] | None = None
+        self._selection: tuple[SongEntry, str, str] | None = None
         self._running = True
+
+        # MIDI state
+        self._midi_config: MidiConfig | None = None
+        self._midi_port_index: int | None = None
+        self._midi_device = None       # open device during setup or play
+        self._midi_input: MidiInput | None = None  # play-time note->lane adapter
+        self._midi_setup: MidiSetup | None = None
 
     # --- queries -----------------------------------------------------------
 
@@ -233,28 +261,64 @@ class App:
 
     # --- transitions -------------------------------------------------------
 
-    def start_game(self, entry: SongEntry, input_mode: str) -> None:
-        """Load *entry* and enter PLAYING. PC Keyboard plays compressed lanes
-        ('pc'); Demo auto-plays the full-fidelity layout ('midi')."""
+    def start_game(self, entry: SongEntry, input_mode: str,
+                   keys_mode: str = 'auto') -> None:
+        """Load *entry* and enter PLAYING.
+
+        PC Keyboard plays compressed lanes ('pc'); Demo auto-plays the 1:1
+        layout ('midi'); MIDI Keyboard plays the 1:1 layout on the chosen
+        keyboard size and routes the device's note_on presses to the engine."""
         demo = input_mode == 'demo'
-        chart_mode = 'midi' if demo else 'pc'
-        self._chart = build_chart(entry.midi_path, chart_mode)
+        self._close_midi()
+        if input_mode == 'midi':
+            kb = None if keys_mode == 'auto' else keyboard_class_by_name(keys_mode)
+            self._chart = build_chart(entry.midi_path, 'midi', kb_override=kb)
+            self._open_play_device(self._chart)
+        else:
+            self._chart = build_chart(entry.midi_path, 'midi' if demo else 'pc')
         clock = self._audio_factory(entry, self._chart)
         self._engine, self._scoring = make_engine(self._chart, clock, demo=demo)
         self._keymap = build_keymap(self._chart.lane_count)
-        self._selection = (entry, input_mode)
+        self._selection = (entry, input_mode, keys_mode)
         self._engine.start()
         self._screen = AppScreen.PLAYING
 
     def to_menu(self) -> None:
-        """Return to the song menu, stopping any in-progress run's audio."""
+        """Return to the song menu, stopping any in-progress run's audio/device."""
         if self._engine is not None:
             self._engine.stop()
+        self._close_midi()
         self._screen = AppScreen.MENU
 
     def retry(self) -> None:
-        entry, input_mode = self._selection
-        self.start_game(entry, input_mode)
+        entry, input_mode, keys_mode = self._selection
+        self.start_game(entry, input_mode, keys_mode)
+
+    # --- MIDI device -------------------------------------------------------
+
+    def _open_play_device(self, chart: Chart) -> None:
+        """Open the configured MIDI port and wrap it for play (note -> lane)."""
+        if self._midi_port_index is None:
+            return
+        device = self._midi_device_factory(self._midi_port_index)
+        self._midi_device = device
+        self._midi_input = MidiInput(device, chart.kb_class.midi_low,
+                                     chart.lane_count)
+
+    def _close_midi(self) -> None:
+        if self._midi_device is not None:
+            self._midi_device.close()
+        self._midi_device = None
+        self._midi_input = None
+
+    def _open_midi_setup(self) -> None:
+        self._midi_setup = MidiSetup(self._ports_provider(), self._size)
+        self._screen = AppScreen.MIDI_SETUP
+
+    def _apply_midi_config(self, action: MidiConfigured) -> None:
+        self._midi_port_index = action.index
+        self._midi_config = MidiConfig(action.name, action.min_note, action.max_note)
+        self._menu.set_midi_config(self._midi_config)
 
     # --- per-frame ---------------------------------------------------------
 
@@ -265,13 +329,32 @@ class App:
             self._handle_playing(event)
         elif self._screen is AppScreen.RESULTS:
             self._handle_results(event)
+        elif self._screen is AppScreen.MIDI_SETUP:
+            self._handle_midi_setup(event)
 
     def _handle_menu(self, event) -> None:
         action = self._menu.handle_event(event)
         if isinstance(action, StartGame):
-            self.start_game(action.entry, action.input_mode)
+            self.start_game(action.entry, action.input_mode, action.keys_mode)
+        elif isinstance(action, OpenMidiSetup):
+            self._open_midi_setup()
         elif isinstance(action, QuitGame):
             self._running = False
+
+    def _handle_midi_setup(self, event) -> None:
+        action = self._midi_setup.handle_key(event)
+        if isinstance(action, OpenDevice):
+            self._close_midi()
+            self._midi_device = self._midi_device_factory(action.index)
+        elif isinstance(action, MidiConfigured):
+            self._apply_midi_config(action)
+            self._close_midi()
+            self._midi_setup = None
+            self._screen = AppScreen.MENU
+        elif action is CancelSetup:
+            self._close_midi()
+            self._midi_setup = None
+            self._screen = AppScreen.MENU
 
     def _handle_playing(self, event) -> None:
         if event.type != pygame.KEYDOWN:
@@ -296,9 +379,16 @@ class App:
 
     def update(self, dt_ms: float) -> None:
         if self._screen is AppScreen.PLAYING:
+            if self._midi_input is not None:
+                for lane in self._midi_input.poll():
+                    self._engine.handle_input(lane)
             self._engine.update(dt_ms)
             if self._engine.is_finished():
+                self._close_midi()
                 self._screen = AppScreen.RESULTS
+        elif self._screen is AppScreen.MIDI_SETUP:
+            if self._midi_device is not None and self._midi_setup is not None:
+                self._midi_setup.handle_midi(self._midi_device.poll())
 
     def render(self) -> None:
         """Draw the current screen. The 2D layers (menu, HUD) are drawn onto the
@@ -313,8 +403,14 @@ class App:
                 self._presenter.present(self._surface)
         elif self._screen is AppScreen.RESULTS:
             if self._surface is not None and self._selection is not None:
-                entry, input_mode = self._selection
+                entry, input_mode, _keys = self._selection
                 self._results.render(self._surface, self._scoring, entry, input_mode)
+            if self._gl:
+                _gl_clear()
+                self._presenter.present(self._surface)
+        elif self._screen is AppScreen.MIDI_SETUP:
+            if self._surface is not None and self._midi_setup is not None:
+                self._midi_setup.render(self._surface)
             if self._gl:
                 _gl_clear()
                 self._presenter.present(self._surface)

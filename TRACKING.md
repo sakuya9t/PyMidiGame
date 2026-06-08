@@ -49,19 +49,60 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 | 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) | ✅ Done — `src/ui/hud.py`, composited over GL via `SurfacePresenter` |
 | 3.5 | Results screen (grade, score, accuracy) | ✅ Done — standalone `src/ui/results.py` (rank, score, accuracy, PERFECT/GREAT/GOOD/MISS, max combo, demo banner) |
 
+## Phase 4 — MIDI Device Input
+
+| # | Task | Status |
+|---|------|--------|
+| 4.1 | MIDI device I/O (`src/midi/device.py`): list ports, open, poll/parse | ✅ Done |
+| 4.2 | Input adapter (`src/input/midi_input.py`): note_on → lane | ✅ Done |
+| 4.3 | Setup + calibration screen (`src/ui/midi_setup.py`): select device, press lowest/highest to measure span | ✅ Done |
+| 4.4 | Menu keys-mode selector + device line + MIDI enablement + per-song playability | ✅ Done |
+| 4.5 | App wiring: MIDI_SETUP screen, `kb_override` chart build, frame-polled play loop | ✅ Done |
+
 > **▶ Playable now:** `python mania.py` opens the **song-selection menu** over
-> `songs/` in an **OpenGL window** (↑↓ pick song · ←→ choose PC Keyboard / Demo,
-> MIDI greyed-out · Enter play · Esc quit; after a song, Enter→menu, R→retry).
-> Gameplay renders the DJmax-style **perspective playfield** (notes fall from a
-> vanishing point toward a neon hit bar) with the HUD composited on top.
-> `python mania.py SONG.mid` still plays one chart directly (`--play` for PC
-> keyboard, `--mode pc`, P = pause, Esc = back).
+> `songs/` in an **OpenGL window** (↑↓ pick song · ←→ choose PC Keyboard / Demo /
+> MIDI Keyboard · K cycle keys-mode · M open MIDI setup · Enter play · Esc quit;
+> after a song, Enter→menu, R→retry). Gameplay renders the DJmax-style
+> **perspective playfield** (notes fall from a vanishing point toward a neon hit
+> bar) with the HUD composited on top. Plug in a **MIDI keyboard**, press `M` to
+> select it and calibrate the span (press lowest + highest key), then play with
+> real keys. `python mania.py SONG.mid` still plays one chart directly (`--play`
+> for PC keyboard, `--mode pc`, P = pause, Esc = back).
 
 ---
 
 ## Session Log
 
-### Session 10 (current)
+### Session 11 (current)
+**MIDI device input — play with a real keyboard (Phase 4)**
+
+Design spec at [`ai-working-log/specs/2026-06-07-midi-device-input-design.md`](ai-working-log/specs/2026-06-07-midi-device-input-design.md).
+The menu previously hard-coded MIDI as "(no device)" and never probed. Now:
+- `src/midi/device.py` — `list_input_ports`, `MidiInputDevice` (open/poll/close),
+  `MidiMsg` parsing (note_on/off, velocity-0→off), `guess_key_count` name hint.
+  rtmidi behind an injectable backend (lazy import) → headless-testable.
+- `src/input/midi_input.py` — `MidiInput.poll()` maps note_on → lane
+  (`note − midi_low`), out-of-range/note_off ignored.
+- `src/ui/midi_setup.py` — device-select + calibration screen. A MIDI port can't
+  report its key count, so the player presses lowest + highest key: this both
+  confirms the link (live echo) and measures the span. `M` opens it from the menu.
+- `src/ui/menu.py` — MIDI mode becomes selectable once a device is configured; a
+  keys-mode selector (`K`) limited to sizes that fit the measured span; songs that
+  don't fit are tagged and not startable in MIDI mode; device/keys lines shown.
+- `src/app.py` — `AppScreen.MIDI_SETUP`; `build_chart(kb_override=…)`; MIDI runs
+  open the port and poll it each frame into `engine.handle_input` (timing ≤ 1
+  frame; callback upgrade is a later option). `to_menu`/finish close the device.
+
+Verified: setup lists the real ports (Oxygen Pro 49 + Focusrite), calibration
+reads "Detected 49 keys: C2 – C6", the menu enables MIDI with KEYS limited to
+AUTO/25/32/37/49 and DEVICE shown, and a polled note_on scores in a MIDI run.
+
+**Suite: 349 tests headless (9 skip = 8 GL smoke + 1 pre-existing); 8 GL smoke
+pass on a real context.** New: test_midi_device (12), test_midi_input (6),
+test_midi_setup (14), test_keyboard_classes (7), test_menu_midi (11),
+test_app_midi (5), +3 scoring-count.
+
+### Session 10
 **Completed Phase 3.3 — OpenGL perspective renderer (texture-first) + Phase 3.4 GL HUD + Phase 3.5 results screen**
 
 Design spec at [`ai-working-log/specs/2026-06-07-opengl-renderer-design.md`](ai-working-log/specs/2026-06-07-opengl-renderer-design.md).
@@ -255,7 +296,7 @@ Design doc updates:
 ### Session 4
 **Completed Phase 2.1–2.2; added type-0 MIDI fixture**
 
-Phase 2.1 — MIDI file parser (`src/midi/parser.py`):
+22Phase 2.1 — MIDI file parser (`src/midi/parser.py`):
 - `NoteEvent` dataclass: `note`, `time_ms`, `duration_ms`, `channel`, `velocity`
 - `MidiParser.parse(path)`: reads type-0 and type-1 MIDI files; builds tempo map from all `set_tempo` messages; converts ticks → ms with mid-file tempo change support; pairs `note_on`/`note_off` (including velocity-0 `note_on`) for duration; returns list sorted by `time_ms`
 - Parser skips non-note MIDI messages before reading note fields, preventing `AttributeError` on control/program changes
