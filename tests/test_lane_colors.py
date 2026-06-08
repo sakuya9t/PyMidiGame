@@ -34,16 +34,21 @@ class TestLaneFamily(unittest.TestCase):
         # midi_low=36 (C2): lane 0=C white, 1=C# blue, 2=D white, 3=D# blue,
         # 4=E white, 5=F white, 6=F# blue.
         expected = ['white', 'blue', 'white', 'blue', 'white', 'white', 'blue']
-        got = [lane_family(lane, 'midi', 36) for lane in range(7)]
+        got = [lane_family(lane, 'midi', 36, 49) for lane in range(7)]
         self.assertEqual(got, expected)
 
-    def test_never_returns_red(self):
-        families = {lane_family(lane, 'midi', 36) for lane in range(49)}
+    def test_midi_mode_never_returns_red(self):
+        families = {lane_family(lane, 'midi', 36, 49) for lane in range(49)}
         self.assertEqual(families, {'white', 'blue'})
 
-    def test_pc_mode_has_no_red(self):
-        families = {lane_family(lane, 'pc', 0) for lane in range(8)}
-        self.assertNotIn('red', families)
+    def test_pc_mode_center_lane_is_red(self):
+        # PC mode has 9 lanes; the center (index 4, the space bar) is red.
+        self.assertEqual(lane_family(4, 'pc', 0, 9), 'red')
+
+    def test_pc_mode_non_center_lanes_alternate_white_blue(self):
+        families = [lane_family(lane, 'pc', 0, 9) for lane in range(9)
+                    if lane != 4]
+        self.assertEqual(set(families), {'white', 'blue'})
 
 
 if __name__ == '__main__':
