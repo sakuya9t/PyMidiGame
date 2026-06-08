@@ -133,6 +133,22 @@ class ScoringEngine:
         return self._max_combo
 
     @property
+    def perfect(self) -> int:
+        return self._perfect
+
+    @property
+    def great(self) -> int:
+        return self._great
+
+    @property
+    def good(self) -> int:
+        return self._good
+
+    @property
+    def miss(self) -> int:
+        return self._miss
+
+    @property
     def accuracy(self) -> float:
         if self._total == 0:
             return 1.0
