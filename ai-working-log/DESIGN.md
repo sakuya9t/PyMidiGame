@@ -421,6 +421,14 @@ demo forwarding, finish-at-tail with cached time, pause/resume. (See
 
 ### 13. `src/ui/renderer.py` — In-Game Renderer (OpenGL + pygame overlay)
 
+> **Implemented (Phase 3.3, Session 10).** See
+> [`ai-working-log/specs/2026-06-07-opengl-renderer-design.md`](specs/2026-06-07-opengl-renderer-design.md).
+> The HUD overlay is composited via a surface→GL-texture fullscreen quad
+> (`src/ui/gl_overlay.py`), not `glDrawPixels`. The neon atlas is uploaded as a GL
+> texture and sampled onto lane/note/hold/hit quads (`src/ui/gl_textures.py`,
+> `src/ui/atlas.py`); placement math is the pure `src/ui/geometry.py`; the flat
+> HUD/countdown/results layer is `src/ui/hud.py`.
+
 **Purpose:** Draw all game visuals each frame using the OpenGL perspective scene (ported from `ui/graph/__init__.py`) with a pygame surface HUD overlay on top.
 
 **Camera and perspective:**

@@ -45,21 +45,66 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 |---|------|--------|
 | 3.1 | Wire `pygame.mixer` audio: load, play, sync position to game clock | ✅ Done |
 | 3.2 | Song selection screen (browse `songs/` directory) + menu→play→results loop | ✅ Done |
-| 3.3 | Renderer (decoupled from `Store`) | 🔶 2D v1 shipped (`src/ui/renderer.py`); OpenGL perspective port pending |
-| 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) | 🔶 Done in 2D renderer; re-do as GL overlay with §13 |
-| 3.5 | Results screen (grade, score, accuracy) | 🔶 Overlay reused by the RESULTS screen; full standalone screen pending |
+| 3.3 | Renderer (decoupled from `Store`) | ✅ Done — OpenGL vanishing-point perspective (`src/ui/renderer.py`), atlas-textured |
+| 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) | ✅ Done — `src/ui/hud.py`, composited over GL via `SurfacePresenter` |
+| 3.5 | Results screen (grade, score, accuracy) | 🔶 GL overlay reused by the RESULTS screen; full standalone screen pending |
 
 > **▶ Playable now:** `python mania.py` opens the **song-selection menu** over
-> `songs/` (↑↓ pick song · ←→ choose PC Keyboard / Demo, MIDI greyed-out · Enter
-> play · Esc quit; after a song, Enter→menu, R→retry). `python mania.py SONG.mid`
-> still plays one chart directly (`--play` for PC keyboard, `--mode pc`, Space =
-> pause, Esc = back to menu).
+> `songs/` in an **OpenGL window** (↑↓ pick song · ←→ choose PC Keyboard / Demo,
+> MIDI greyed-out · Enter play · Esc quit; after a song, Enter→menu, R→retry).
+> Gameplay renders the DJmax-style **perspective playfield** (notes fall from a
+> vanishing point toward a neon hit bar) with the HUD composited on top.
+> `python mania.py SONG.mid` still plays one chart directly (`--play` for PC
+> keyboard, `--mode pc`, P = pause, Esc = back).
 
 ---
 
 ## Session Log
 
-### Session 9 (current)
+### Session 10 (current)
+**Completed Phase 3.3 — OpenGL perspective renderer (texture-first) + Phase 3.4 GL HUD**
+
+Design spec at [`ai-working-log/specs/2026-06-07-opengl-renderer-design.md`](ai-working-log/specs/2026-06-07-opengl-renderer-design.md).
+Replaced the 2D lane renderer with a DJmax-style **OpenGL vanishing-point
+playfield**. One persistent `DOUBLEBUF | OPENGL` window: the 3D scene is drawn in
+perspective, and every 2D layer (menu, HUD, countdown, results) is composited on
+top as a fullscreen textured quad (retiring the legacy `glDrawPixels` path).
+**Texture rendering is first-class** so later visual effects can build on it.
+
+New/changed modules:
+- `src/ui/atlas.py` — shared atlas region table + `uv()` (GL bottom-left v-flip);
+  single source of truth, now imported by `NeonMaterialKit` too.
+- `src/ui/geometry.py` — pure world-space math: `note_z`, `lane_world_x`,
+  `lane_bounds_world`, `clamp_interval` (the hold-length clamp the legacy renderer
+  left as a FIXME). Camera-agnostic, fully unit-tested.
+- `src/ui/gl_textures.py` — `AtlasTexture` (atlas uploaded once, sampled by UV,
+  flat-color fallback when absent) + `SurfaceTexture` (dynamic per-frame upload).
+- `src/ui/gl_overlay.py` — `SurfacePresenter`: upright, alpha-blended fullscreen
+  textured quad for compositing a pygame surface over the GL scene.
+- `src/ui/hud.py` — `HudOverlay`: score/combo/accuracy/DEMO + countdown + results
+  onto a transparent surface (extracted from the old renderer).
+- `src/ui/renderer.py` — rewritten as a GL `Renderer`: camera + board + neon
+  lanes + hit bar + note/hold tiles via a single `_textured_quad` primitive (the
+  seam for future FX). Signature dropped the `target` surface arg.
+- `src/app.py` — `Renderer` (3D) + `HudOverlay` + `SurfacePresenter`, GL-gated so
+  headless tests still exercise the 2D layers; `run()`/`App.run()` open the GL
+  window. `mania.py` unchanged (entry points stable).
+
+Testing (the project's headless TDD can't drive real GL):
+- Pure units (headless, keep the suite green): `test_atlas.py` (6), `test_geometry.py`
+  (15), `test_hud.py` (6 incl. the atlas-material check).
+- **GL smoke** (`test_gl_textures.py` 4, `test_gl_renderer.py` 4): create a real
+  context, render, and read the framebuffer back (`glReadPixels`) to prove pixels
+  rasterize; `skipUnless` a context exists, so they run on a real display and
+  auto-skip under the SDL dummy driver / CI. Removed the superseded `test_renderer.py`.
+- **Visual verification:** rendered menu / countdown / gameplay / results frames to
+  a hidden GL window and inspected the screenshots — perspective playfield with
+  textured neon lanes, atlas hit bar, falling notes, and the HUD composited on top.
+
+**Suite: 284 tests headless (9 skip = 8 GL smoke + 1 pre-existing); the 8 GL smoke
+tests pass on a real OpenGL 4.6 context.**
+
+### Session 9
 **Completed Phase 3.2 — Song selection screen + app-flow loop (brainstorm → spec → TDD)**
 
 Design spec at [`ai-working-log/specs/2026-06-06-song-select-design.md`](ai-working-log/specs/2026-06-06-song-select-design.md).
