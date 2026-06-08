@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "name": "neon_arcade_skin_resources",
+  "purpose": "Supplemental resource inventory for building a fancier atlas-driven neon rhythm-game UI from resources/ui/neon_texture_atlas.png.",
+  "primary_atlas": {
+    "path": "resources/ui/neon_texture_atlas.png",
+    "size": [1254, 1254],
+    "notes": [
+      "The atlas image already contains many UI parts that are not registered in src/ui/atlas.py yet.",
+      "This file separates assets that are present-but-unregistered from assets that should be generated at runtime or supplied externally."
+    ]
+  },
+  "generated_bitmap_assets": {
+    "stage_background": {
+      "status": "generated",
+      "path": "resources/ui/neon_arcade_stage_background.png",
+      "size": [1672, 941],
+      "intended_use": "Optional 16:9 gameplay backdrop behind the OpenGL note highway, with a dark center reserved for lane readability.",
+      "prompt_summary": "Dark futuristic neon concert stage, blue/cyan/magenta arcade palette, speakers and crowd silhouettes at the edges, no UI, no text."
+    },
+    "jacket_placeholder": {
+      "status": "generated",
+      "path": "resources/ui/neon_arcade_jacket_placeholder.png",
+      "size": [1254, 1254],
+      "intended_use": "Fallback square song jacket art for the song info panel when a song has no cover image.",
+      "prompt_summary": "Abstract neon crystal emblem on black, blue/cyan/magenta/red highlights, no text, no logo."
+    },
+    "panel_texture_tile": {
+      "status": "generated",
+      "path": "resources/ui/neon_arcade_panel_texture_tile.png",
+      "size": [1254, 1254],
+      "intended_use": "Low-contrast tiled or cropped texture for dark HUD panel interiors.",
+      "prompt_summary": "Very dark sci-fi carbon/glass texture with microgrid, sparse cyan/magenta pixels, no border, no text."
+    }
+  },
+  "default_hud_layout": {
+    "base_size": [1366, 768],
+    "coordinate_space": "screen pixels",
+    "rules": [
+      "Use these rects as the 1366x768 first-pass layout.",
+      "For other sizes, scale uniformly from base_size with scale = min(width / 1366, height / 768), then anchor left-column panels to the left margin and right-column panels to the right margin.",
+      "Do not place opaque HUD panels in the central playfield inspection area unless explicitly designing a modal/countdown/results overlay."
+    ],
+    "safe_transparent_points": [
+      [683, 384],
+      [683, 520]
+    ],
+    "playfield_inspection_area": [448, 70, 470, 560],
+    "panels": {
+      "song_panel": [28, 24, 404, 154],
+      "gauge_panel": [28, 194, 356, 88],
+      "small_stat_box": [28, 320, 174, 96],
+      "score_panel": [940, 24, 398, 130],
+      "combo_panel": [998, 176, 340, 126]
+    }
+  },
+  "asset_status_values": {
+    "registered": "Already present in src/ui/atlas.py and available through NeonMaterialKit / AtlasTexture.",
+    "present_unregistered": "Visible in neon_texture_atlas.png but not yet named in src/ui/atlas.py.",
+    "runtime_generated": "Not worth storing as bitmap art; generate deterministically with pygame surfaces.",
+    "runtime_generated_or_use_generated_bitmap": "A generated bitmap exists for the first skin pass, but a deterministic runtime fallback is also acceptable.",
+    "generated": "Generated with the built-in GPT image tool and copied into resources/ui.",
+    "generated_with_external_override": "A generated default exists, but songs or future packs may override it.",
+    "external_optional": "Content-specific asset supplied by songs or future packs, with an in-game fallback."
+  },
+  "currently_registered": {
+    "blue": [
+      "lane",
+      "hit",
+      "note",
+      "hold",
+      "key",
+      "panel",
+      "gauge_empty",
+      "gauge_filled",
+      "spark"
+    ],
+    "white": [
+      "lane",
+      "note",
+      "hold",
+      "key",
+      "panel",
+      "spark"
+    ],
+    "red": [
+      "lane",
+      "note",
+      "hold",
+      "key",
+      "panel",
+      "spark"
+    ]
+  },
+  "primary_atlas_registrations_to_add": {
+    "blue": {
+      "score_panel": {
+        "status": "present_unregistered",
+        "rect": [740, 67, 484, 101],
+        "nine_slice_border": [42, 24, 50, 26],
+        "nine_slice_min_size": [92, 50],
+        "atlas_section": "5. HUD FRAMES (PANELS)",
+        "source_label": "SCORE PANEL",
+        "intended_use": "Right-side score container with nine-slice scaling.",
+        "measurement_note": "Alias of the existing carefully measured blue/panel rect. Border preserves left layered corner, right end cap, top bevels, and bottom glow/accent band."
+      },
+      "song_info_panel": {
+        "status": "present_unregistered",
+        "rect": [739, 340, 243, 104],
+        "nine_slice_border": [92, 18, 30, 34],
+        "nine_slice_min_size": [122, 52],
+        "atlas_section": "5. HUD FRAMES (PANELS)",
+        "source_label": "SONG INFO PANEL",
+        "intended_use": "Left-side title/artist/BPM container.",
+        "measurement_note": "Large left border preserves the built-in jacket aperture; large bottom border preserves equalizer bars."
+      },
+      "gauge_panel": {
+        "status": "present_unregistered",
+        "rect": [1009, 338, 209, 84],
+        "nine_slice_border": [46, 24, 46, 24],
+        "nine_slice_min_size": [92, 48],
+        "atlas_section": "5. HUD FRAMES (PANELS)",
+        "source_label": "GAUGE PANEL",
+        "intended_use": "Accuracy/life gauge shell.",
+        "measurement_note": "Left/right borders preserve the oval caps; top/bottom borders preserve outer rings."
+      },
+      "small_stat_box": {
+        "status": "present_unregistered",
+        "rect": [744, 481, 123, 73],
+        "nine_slice_border": [34, 22, 34, 22],
+        "nine_slice_min_size": [68, 44],
+        "atlas_section": "5. HUD FRAMES (PANELS)",
+        "source_label": "SMALL STAT BOX",
+        "intended_use": "HI-SPEED or compact status panels.",
+        "measurement_note": "Borders preserve all four chamfered corner stacks."
+      },
+      "generic_wide_panel": {
+        "status": "present_unregistered",
+        "rect": [894, 476, 342, 86],
+        "nine_slice_border": [44, 22, 44, 24],
+        "nine_slice_min_size": [88, 46],
+        "atlas_section": "5. HUD FRAMES (PANELS)",
+        "source_label": "GENERIC WIDE PANEL",
+        "intended_use": "Reusable results/menu strip or fallback wide panel.",
+        "measurement_note": "Borders preserve left/right bevel stacks and bottom accent band."
+      },
+      "gauge_overlay_glow": {
+        "status": "present_unregistered",
+        "rect": [740, 754, 490, 30],
+        "atlas_section": "6. GAUGE / METER ELEMENTS",
+        "source_label": "GAUGE OVERLAY GLOW",
+        "intended_use": "Additive glow over the filled gauge."
+      },
+      "meter_piece_full": {
+        "status": "present_unregistered",
+        "rect": [743, 820, 60, 25],
+        "atlas_section": "6. GAUGE / METER ELEMENTS",
+        "source_label": "SEGMENTED METER PIECES",
+        "intended_use": "Optional per-segment gauge rendering if full-bar clipping is not crisp enough."
+      },
+      "decor_corner": {
+        "status": "present_unregistered",
+        "rect": [18, 932, 37, 37],
+        "atlas_section": "7. DECORATIVE FRAME PARTS & ACCENTS",
+        "source_label": "corner frame parts",
+        "intended_use": "Small additive corner trims on panels and screen edges."
+      },
+      "decor_line": {
+        "status": "present_unregistered",
+        "rect": [18, 992, 377, 10],
+        "atlas_section": "7. DECORATIVE FRAME PARTS & ACCENTS",
+        "source_label": "thin line / dashed line / arrow accents",
+        "intended_use": "Panel accents, dividers, and animated-looking HUD detail."
+      },
+      "glint_tiny": {
+        "status": "present_unregistered",
+        "rect": [706, 1045, 120, 80],
+        "atlas_section": "8. FX / EFFECTS",
+        "source_label": "TINY PARTICLES / GLINTS",
+        "intended_use": "Subtle additive sparkle around hit line, score, and combo panels."
+      },
+      "impact_spark": {
+        "status": "present_unregistered",
+        "rect": [560, 1036, 110, 102],
+        "atlas_section": "8. FX / EFFECTS",
+        "source_label": "LANE IMPACT SPARK blue",
+        "intended_use": "Large hit-line impact bloom for successful hits.",
+        "measurement_note": "Alias of the existing carefully measured blue/spark rect."
+      },
+      "life_icon": {
+        "status": "present_unregistered",
+        "rect": [118, 1184, 60, 50],
+        "atlas_section": "9. ADDITIONAL UI ELEMENTS",
+        "source_label": "LIFE ICON",
+        "intended_use": "Optional gauge/life label icon."
+      },
+      "multiplier_chip": {
+        "status": "present_unregistered",
+        "rect": [558, 1186, 66, 50],
+        "atlas_section": "9. ADDITIONAL UI ELEMENTS",
+        "source_label": "MULTIPLIER / CHIP",
+        "intended_use": "Optional combo multiplier badge."
+      },
+      "arrows": {
+        "status": "present_unregistered",
+        "rect": [682, 1195, 90, 31],
+        "atlas_section": "9. ADDITIONAL UI ELEMENTS",
+        "source_label": "ARROWS",
+        "intended_use": "Menu/results affordances and decorative motion cues."
+      },
+      "screw_decal": {
+        "status": "present_unregistered",
+        "rect": [1110, 1198, 20, 20],
+        "atlas_section": "9. ADDITIONAL UI ELEMENTS",
+        "source_label": "SCREW / BOLT DECALS",
+        "intended_use": "Tiny panel detail when extra density is needed."
+      }
+    },
+    "red": {
+      "combo_panel": {
+        "status": "present_unregistered",
+        "rect": [739, 214, 483, 90],
+        "nine_slice_border": [42, 22, 44, 26],
+        "nine_slice_min_size": [86, 48],
+        "atlas_section": "5. HUD FRAMES (PANELS)",
+        "source_label": "COMBO PANEL",
+        "intended_use": "Right-side combo container with red/pink glow.",
+        "measurement_note": "Alias of the existing carefully measured red/panel rect. Border preserves left layered corner, right end cap, and bottom glow/accent band."
+      },
+      "impact_spark": {
+        "status": "present_unregistered",
+        "rect": [787, 1036, 110, 102],
+        "atlas_section": "8. FX / EFFECTS",
+        "source_label": "LANE IMPACT SPARK red",
+        "intended_use": "Center-lane or combo-hit bloom.",
+        "measurement_note": "Alias of the existing carefully measured red/spark rect."
+      },
+      "glint_tiny": {
+        "status": "present_unregistered",
+        "rect": [1035, 1045, 185, 80],
+        "atlas_section": "8. FX / EFFECTS",
+        "source_label": "TINY PARTICLES / GLINTS red",
+        "intended_use": "Small red sparkle accents around combo UI."
+      }
+    },
+    "white": {
+      "impact_spark": {
+        "status": "present_unregistered",
+        "rect": [673, 1036, 110, 102],
+        "atlas_section": "8. FX / EFFECTS",
+        "source_label": "LANE IMPACT SPARK white",
+        "intended_use": "White-key hit-line impact bloom.",
+        "measurement_note": "Alias of the existing carefully measured white/spark rect."
+      },
+      "glint_tiny": {
+        "status": "present_unregistered",
+        "rect": [840, 1045, 165, 80],
+        "atlas_section": "8. FX / EFFECTS",
+        "source_label": "TINY PARTICLES / GLINTS white",
+        "intended_use": "Neutral highlight sparkles."
+      }
+    },
+    "rank": {
+      "rank_c": {
+        "status": "present_unregistered",
+        "rect": [201, 1177, 57, 60],
+        "atlas_section": "9. ADDITIONAL UI ELEMENTS",
+        "source_label": "RANK BADGES C",
+        "intended_use": "Results screen rank badge."
+      },
+      "rank_b": {
+        "status": "present_unregistered",
+        "rect": [266, 1177, 57, 60],
+        "atlas_section": "9. ADDITIONAL UI ELEMENTS",
+        "source_label": "RANK BADGES B",
+        "intended_use": "Results screen rank badge."
+      },
+      "rank_a": {
+        "status": "present_unregistered",
+        "rect": [331, 1177, 57, 60],
+        "atlas_section": "9. ADDITIONAL UI ELEMENTS",
+        "source_label": "RANK BADGES A",
+        "intended_use": "Results screen rank badge."
+      },
+      "rank_s": {
+        "status": "present_unregistered",
+        "rect": [394, 1177, 57, 60],
+        "atlas_section": "9. ADDITIONAL UI ELEMENTS",
+        "source_label": "RANK BADGES S",
+        "intended_use": "Results screen rank badge."
+      },
+      "rank_s_plus": {
+        "status": "present_unregistered",
+        "rect": [461, 1177, 58, 60],
+        "atlas_section": "9. ADDITIONAL UI ELEMENTS",
+        "source_label": "RANK BADGES S+",
+        "intended_use": "Results screen rank badge."
+      }
+    }
+  },
+  "runtime_generated_assets": {
+    "panel_noise_tile": {
+      "status": "runtime_generated_or_use_generated_bitmap",
+      "size": [128, 128],
+      "recipe": "Prefer resources/ui/neon_arcade_panel_texture_tile.png for the first skin pass. If a smaller deterministic tile is needed, create a SRCALPHA surface with sparse blue/red/white pixels at alpha 8-22, then tile inside panel interiors.",
+      "intended_use": "Adds texture to black panel fill without needing another bitmap."
+    },
+    "scanline_overlay": {
+      "status": "runtime_generated",
+      "size": [4, 4],
+      "recipe": "Horizontal 1px line at alpha 18 on transparent background, tiled over HUD panels and optional full-screen overlay.",
+      "intended_use": "Subtle arcade display texture."
+    },
+    "text_glow": {
+      "status": "runtime_generated",
+      "recipe": "Render text multiple times in glow color at small offsets or scaled copies using BLEND_RGBA_ADD, then render the crisp foreground text.",
+      "intended_use": "Score/combo labels and numeric glow."
+    },
+    "jacket_placeholder": {
+      "status": "runtime_generated_or_use_generated_bitmap",
+      "size": [160, 160],
+      "recipe": "Prefer resources/ui/neon_arcade_jacket_placeholder.png. If runtime text/initials are desired, draw atlas decor corners and title initials over a dark square.",
+      "intended_use": "Song info panel fallback when no cover art exists."
+    },
+    "background_vignette": {
+      "status": "runtime_generated",
+      "recipe": "Transparent radial/linear darkening layer drawn over the 3D scene edges; no stored bitmap needed.",
+      "intended_use": "Makes HUD readable over bright gameplay."
+    }
+  },
+  "external_optional_assets": {
+    "song_jacket": {
+      "status": "external_optional",
+      "expected_locations": [
+        "songs/<song-id>/jacket.png",
+        "songs/<song-id>/cover.png"
+      ],
+      "fallback": "generated_bitmap_assets.jacket_placeholder",
+      "intended_use": "Left song panel art."
+    },
+    "stage_background": {
+      "status": "generated_with_external_override",
+      "expected_locations": [
+        "resources/ui/stage_background.png",
+        "songs/<song-id>/background.png"
+      ],
+      "fallback": "generated_bitmap_assets.stage_background, or current OpenGL dark background plus runtime background_vignette if disabled",
+      "intended_use": "Optional concert/cyber-stage backdrop similar to the reference image."
+    }
+  },
+  "implementation_rules": [
+    "Do not add another mandatory third-party dependency just to render these assets.",
+    "src/ui/atlas.py remains the source of truth for numeric atlas rects and GL UVs.",
+    "This JSON is a planning/catalog resource; implementation may load it for validation, but runtime rendering should not depend on JSON parsing unless tests cover it.",
+    "Any bitmap asset listed as runtime_generated should be generated deterministically so screenshots and tests remain stable."
+  ]
+}
