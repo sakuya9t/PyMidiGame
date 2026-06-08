@@ -180,7 +180,7 @@ class MidiSetup:
 
         if self.last_note is not None:
             echo = self._row.render(
-                f'✓ received {note_name(self.last_note)} ({self.last_note})',
+                f'received {note_name(self.last_note)} ({self.last_note})',
                 True, _OK)
             target.blit(echo, echo.get_rect(center=(self.width // 2, 430)))
 

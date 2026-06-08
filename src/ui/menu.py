@@ -315,7 +315,7 @@ class SongMenu:
 
     def _draw_detail(self, target: pygame.Surface) -> None:
         song = self.songs[self.selected_index]
-        y = self.height - 196
+        y = self.height - 200
         parts = [song.title]
         if song.artist:
             parts.append(song.artist)
@@ -323,12 +323,13 @@ class SongMenu:
         if song.bpm:
             parts.append(f"{int(song.bpm)} BPM")
         parts.append(_fmt_duration(song.total_duration_ms))
-        target.blit(self._small.render('   '.join(parts), True, _MUTED), (60, y))
+        surf = self._small.render('   '.join(parts), True, _MUTED)
+        target.blit(surf, (60, y))
         if self.input_mode == 'midi':
             ok = self.midi_playable(song)
-            tag = '✓ fits your keyboard' if ok else '✗ needs a larger keyboard'
+            tag = '  fits your keyboard' if ok else '  needs a larger keyboard'
             target.blit(self._small.render(tag, True, _OK if ok else _CENTER),
-                        (60, y + 24))
+                        (60 + surf.get_width(), y))
 
     def _draw_empty(self, target: pygame.Surface) -> None:
         msg = 'No songs found — add a folder under songs/ with a chart.mid.'
