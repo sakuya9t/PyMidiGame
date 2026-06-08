@@ -247,6 +247,9 @@ class App:
         self._screen = AppScreen.PLAYING
 
     def to_menu(self) -> None:
+        """Return to the song menu, stopping any in-progress run's audio."""
+        if self._engine is not None:
+            self._engine.stop()
         self._screen = AppScreen.MENU
 
     def retry(self) -> None:

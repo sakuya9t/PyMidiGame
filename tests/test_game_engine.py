@@ -392,5 +392,28 @@ class TestPauseResume(unittest.TestCase):
         self.assertNotIn('resume', clock.calls)
 
 
+class TestStop(unittest.TestCase):
+    """stop() aborts a run early (e.g. quitting to the menu mid-song)."""
+
+    def test_stop_halts_clock_and_returns_to_idle(self):
+        clock, scoring = FakeClock(), FakeScoring()
+        eng = _play(clock, scoring)
+        self.assertTrue(clock.is_playing())   # sanity: audio is running
+        eng.stop()
+        self.assertFalse(clock.is_playing())
+        self.assertIn('stop', clock.calls)
+        self.assertIs(eng.state, GameState.IDLE)
+
+    def test_stop_during_countdown_is_safe(self):
+        # Aborting before play starts (clock not yet playing) must not raise.
+        clock, scoring = FakeClock(), FakeScoring()
+        eng = GameEngine(clock, scoring, countdown_ms=3000)
+        eng.load(_chart())
+        eng.start()  # COUNTDOWN
+        eng.stop()
+        self.assertIs(eng.state, GameState.IDLE)
+        self.assertIn('stop', clock.calls)
+
+
 if __name__ == '__main__':
     unittest.main()
