@@ -149,6 +149,14 @@ class GameEngine:
             self._paused_from = None
             self._clock.resume()
 
+    def stop(self) -> None:
+        """Abort a run early (e.g. the player quits to the menu mid-song):
+        stop the clock so audio doesn't keep playing, and return to IDLE.
+        Safe and idempotent in any state."""
+        self._clock.stop()
+        self._paused_from = None
+        self._state = GameState.IDLE
+
     # --- Queries -----------------------------------------------------------
 
     def current_ms(self) -> float:

@@ -15,6 +15,9 @@ from enum import Enum, auto
 from typing import Callable
 
 import pygame
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor,
+)
 
 from src.midi.parser import MidiParser
 from src.midi.classifier import classify
@@ -25,9 +28,24 @@ from src.game.demo import DemoPlayer
 from src.audio.player import AudioPlayer
 from src.audio.synth import synthesize_midi_to_wav
 from src.ui.renderer import Renderer
+from src.ui.hud import HudOverlay
+from src.ui.results import ResultsScreen
+from src.ui.gl_overlay import SurfacePresenter
 from src.ui.menu import scan_songs, SongMenu, SongEntry, StartGame, QuitGame
 
 SIZE = (960, 720)
+
+
+def _open_gl_window(size: tuple[int, int]) -> pygame.Surface:
+    """Open the double-buffered OpenGL window used for the whole app."""
+    screen = pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.OPENGL)
+    pygame.display.set_caption('MidiMania')
+    return screen
+
+
+def _gl_clear() -> None:
+    glClearColor(0.015, 0.03, 0.07, 1.0)
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
 # PC keyboard lane mapping for 9 lanes: A S D F Space J K L ;
 PC_KEYS = [pygame.K_a, pygame.K_s, pygame.K_d, pygame.K_f,
@@ -104,16 +122,18 @@ def _is_midi_source(path: str) -> bool:
 
 def run(midi_path: str, audio_path: str | None = None, *,
         demo: bool = True, mode: str = 'midi') -> None:
-    """Launch the windowed game loop. Blocks until the window is closed."""
+    """Launch the windowed game loop for a single chart. Blocks until closed."""
     pygame.init()
-    screen = pygame.display.set_mode(SIZE)
-    pygame.display.set_caption('MidiMania')
+    _open_gl_window(SIZE)
 
     chart = build_chart(midi_path, mode)
     audio = make_audio(midi_path, audio_path, chart=chart)
 
     engine, scoring = make_engine(chart, audio, demo=demo)
     renderer = Renderer(SIZE)
+    hud = HudOverlay(SIZE)
+    presenter = SurfacePresenter(SIZE)
+    overlay = pygame.Surface(SIZE, pygame.SRCALPHA)
     keymap = build_keymap(chart.lane_count)
     engine.start()
 
@@ -133,9 +153,10 @@ def run(midi_path: str, audio_path: str | None = None, *,
                     engine.resume() if engine.state.name == 'PAUSED' else engine.pause()
 
         engine.update(dt_ms)
-        renderer.render(screen, chart, engine.current_ms(), scoring,
-                        state=engine.state, countdown=engine.countdown_value(),
-                        is_demo=engine.is_demo())
+        renderer.render(chart, engine.current_ms())
+        hud.render(overlay, scoring, state=engine.state,
+                   countdown=engine.countdown_value(), is_demo=engine.is_demo())
+        presenter.present(overlay)
         pygame.display.flip()
 
     pygame.quit()
@@ -171,7 +192,11 @@ class App:
         self._songs = scan(songs_dir)
         self._menu = SongMenu(self._songs, size)
         self._renderer = Renderer(size)
+        self._hud = HudOverlay(size)
+        self._results = ResultsScreen(size)
+        self._presenter = SurfacePresenter(size)
         self._surface = surface
+        self._gl = False  # set True once run() opens a real OpenGL window
         self._audio_factory = audio_factory or self._default_audio
         self._screen = AppScreen.MENU
         self._engine: GameEngine | None = None
@@ -222,6 +247,9 @@ class App:
         self._screen = AppScreen.PLAYING
 
     def to_menu(self) -> None:
+        """Return to the song menu, stopping any in-progress run's audio."""
+        if self._engine is not None:
+            self._engine.stop()
         self._screen = AppScreen.MENU
 
     def retry(self) -> None:
@@ -273,16 +301,32 @@ class App:
                 self._screen = AppScreen.RESULTS
 
     def render(self) -> None:
-        if self._surface is None:
-            return
+        """Draw the current screen. The 2D layers (menu, HUD) are drawn onto the
+        offscreen surface; when a GL window is open they are composited as a
+        textured quad over the 3D playfield. Without GL (headless tests) only the
+        2D layers are drawn, exercising them without a context."""
         if self._screen is AppScreen.MENU:
-            self._menu.render(self._surface)
-        else:
-            self._renderer.render(
-                self._surface, self._chart, self._engine.current_ms(),
-                self._scoring, state=self._engine.state,
-                countdown=self._engine.countdown_value(),
-                is_demo=self._engine.is_demo())
+            if self._surface is not None:
+                self._menu.render(self._surface)
+            if self._gl:
+                _gl_clear()
+                self._presenter.present(self._surface)
+        elif self._screen is AppScreen.RESULTS:
+            if self._surface is not None and self._selection is not None:
+                entry, input_mode = self._selection
+                self._results.render(self._surface, self._scoring, entry, input_mode)
+            if self._gl:
+                _gl_clear()
+                self._presenter.present(self._surface)
+        else:  # PLAYING
+            if self._surface is not None:
+                self._hud.render(
+                    self._surface, self._scoring, state=self._engine.state,
+                    countdown=self._engine.countdown_value(),
+                    is_demo=self._engine.is_demo())
+            if self._gl:
+                self._renderer.render(self._chart, self._engine.current_ms())
+                self._presenter.present(self._surface)
 
     def step(self, dt_ms: float, events) -> bool:
         """Advance one frame over *events*; returns whether the app keeps running."""
@@ -296,10 +340,11 @@ class App:
         return self._running
 
     def run(self) -> None:
-        """Open the window and run the menu->play->results loop until quit."""
+        """Open the GL window and run the menu->play->results loop until quit."""
         pygame.init()
-        self._surface = pygame.display.set_mode(self._size)
-        pygame.display.set_caption('MidiMania')
+        _open_gl_window(self._size)
+        self._gl = True
+        self._surface = pygame.Surface(self._size, pygame.SRCALPHA)
         frame_clock = pygame.time.Clock()
         while self._running:
             dt_ms = frame_clock.tick(60)

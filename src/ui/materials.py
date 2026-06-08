@@ -13,6 +13,8 @@ import math
 
 import pygame
 
+from src.ui.atlas import ATLAS_RECTS
+
 Color = tuple[int, int, int]
 Point = tuple[float, float]
 
@@ -49,35 +51,8 @@ def _interp_x(a: Point, b: Point, y: float) -> float:
 class NeonMaterialKit:
     """Draws small atlas-inspired neon materials onto pygame surfaces."""
 
-    _ATLAS_RECTS = {
-        'blue': {
-            'lane': (34, 72, 82, 498),
-            'hit': (389, 63, 316, 16),
-            'note': (389, 158, 84, 36),
-            'hold': (389, 336, 82, 164),
-            'key': (18, 646, 80, 62),
-            'panel': (740, 67, 484, 101),
-            'gauge_empty': (740, 629, 488, 23),
-            'gauge_filled': (740, 693, 488, 23),
-            'spark': (560, 1036, 110, 102),
-        },
-        'white': {
-            'lane': (150, 72, 82, 498),
-            'note': (500, 158, 84, 36),
-            'hold': (500, 336, 82, 164),
-            'key': (95, 646, 68, 62),
-            'panel': (895, 486, 340, 68),
-            'spark': (673, 1036, 110, 102),
-        },
-        'red': {
-            'lane': (267, 72, 82, 498),
-            'note': (611, 158, 84, 36),
-            'hold': (612, 336, 82, 164),
-            'key': (325, 646, 68, 62),
-            'panel': (739, 214, 483, 90),
-            'spark': (787, 1036, 110, 102),
-        },
-    }
+    # Atlas sub-rects live in src/ui/atlas.py (shared with the GL AtlasTexture).
+    _ATLAS_RECTS = ATLAS_RECTS
 
     def __init__(self, atlas_path: str | None = None) -> None:
         root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

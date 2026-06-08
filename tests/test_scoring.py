@@ -11,7 +11,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.game.scoring import ScoringEngine, Judgment
+from src.game.scoring import ScoringEngine, Judgment, GOOD_MS
 from src.game.chart import Note, Chart
 from src.midi.classifier import KeyboardClass
 
@@ -52,6 +52,29 @@ class TestReset(unittest.TestCase):
         eng.reset(_chart(notes))
         self.assertFalse(notes[0].hit)
         self.assertFalse(notes[0].missed)
+
+
+class TestJudgmentCounts(unittest.TestCase):
+    """Per-judgment tallies exposed for the results screen (DESIGN §15)."""
+
+    def test_counts_start_at_zero(self):
+        eng = _engine([_n(0, 1000)])
+        self.assertEqual((eng.perfect, eng.great, eng.good, eng.miss), (0, 0, 0, 0))
+
+    def test_counts_track_each_grade(self):
+        eng = _engine([_n(0, 1000), _n(1, 2000), _n(2, 3000), _n(3, 4000)])
+        eng.register_hit(0, 1000)        # PERFECT (0 ms)
+        eng.register_hit(1, 2000 + 60)   # GREAT  (60 ms)
+        eng.register_hit(2, 3000 + 100)  # GOOD   (100 ms)
+        eng.tick(4000 + GOOD_MS + 1)     # note at 4000 times out -> MISS
+        self.assertEqual((eng.perfect, eng.great, eng.good, eng.miss), (1, 1, 1, 1))
+
+    def test_counts_cleared_on_reset(self):
+        notes = [_n(0, 1000)]
+        eng = _engine(notes)
+        eng.register_hit(0, 1000)
+        eng.reset(_chart(notes))
+        self.assertEqual((eng.perfect, eng.great, eng.good, eng.miss), (0, 0, 0, 0))
 
 
 class TestHitWindows(unittest.TestCase):

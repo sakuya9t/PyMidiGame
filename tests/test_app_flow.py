@@ -109,6 +109,17 @@ class AppFlowTest(unittest.TestCase):
         self.app.handle_event(_key(pygame.K_ESCAPE))
         self.assertEqual(self.app.screen, AppScreen.MENU)
 
+    def test_escape_during_play_stops_audio(self):
+        # Bug: leaving a song mid-play (Esc to the menu) must stop the audio;
+        # otherwise the track keeps playing under the menu.
+        self.app.start_game(self.app.songs[0], 'demo')
+        self.app.update(3000)  # cross countdown -> DEMO, clock.play()
+        clock = self.clocks.last
+        self.assertTrue(clock.is_playing())          # sanity: audio is running
+        self.app.handle_event(_key(pygame.K_ESCAPE))
+        self.assertEqual(self.app.screen, AppScreen.MENU)
+        self.assertFalse(clock.is_playing())         # must be stopped
+
     def test_demo_run_finishes_to_results_perfect(self):
         self.app.start_game(self.app.songs[0], 'demo')
         self.app.update(3000)  # cross the countdown -> DEMO, clock.play()
