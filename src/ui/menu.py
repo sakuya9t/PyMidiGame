@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import pygame
 
 from src.midi.parser import MidiParser
-from src.midi.classifier import classify
+from src.midi.classifier import classify, classes_within, keyboard_class_by_name
 
 # Produced-audio extensions accepted as a sibling of the chart, in preference
 # order. Kept local (not imported from src.app) to avoid an import cycle.
@@ -45,6 +45,8 @@ _MUTED = (120, 170, 220)
 _DISABLED = (70, 80, 100)
 _HILITE = (255, 205, 80)
 _SEL_ROW = (24, 44, 80)
+_OK = (90, 240, 170)
+_CENTER = (255, 48, 70)
 
 
 @dataclass
@@ -62,14 +64,30 @@ class SongEntry:
 
 
 @dataclass
+class MidiConfig:
+    """A configured MIDI input device and its calibrated playable span."""
+    name: str
+    min_note: int
+    max_note: int
+
+
+@dataclass
 class StartGame:
-    """Menu action: begin a run of *entry* in *input_mode* ('pc' or 'demo')."""
+    """Menu action: begin a run of *entry* in *input_mode* ('pc'/'demo'/'midi').
+
+    keys_mode is 'auto' (classify per song) or a keyboard-class name (e.g.
+    '49key') chosen for MIDI play."""
     entry: SongEntry
     input_mode: str
+    keys_mode: str = 'auto'
 
 
 class QuitGame:
     """Menu action: leave the game."""
+
+
+class OpenMidiSetup:
+    """Menu action: open the MIDI device setup/calibration screen."""
 
 
 # --- scanning --------------------------------------------------------------
@@ -165,37 +183,94 @@ def _fmt_duration(ms: float) -> str:
 class SongMenu:
     """The MENU screen: select a song + input mode, or quit."""
 
-    def __init__(self, songs: list[SongEntry], size: tuple[int, int]) -> None:
+    def __init__(self, songs: list[SongEntry], size: tuple[int, int],
+                 midi_config: MidiConfig | None = None) -> None:
         self.songs = songs
         self.width, self.height = size
         self.selected_index = 0
-        self.mode_index = 0  # over SELECTABLE_MODES
+        self.mode_index = 0  # over selectable_modes
+        self.keys_index = 0  # over keys_options
+        self.midi_config = midi_config
         pygame.font.init()
         self._title = pygame.font.SysFont('consolas,menlo,monospace', 44, bold=True)
         self._row = pygame.font.SysFont('consolas,menlo,monospace', 26)
         self._small = pygame.font.SysFont('consolas,menlo,monospace', 18)
         self._hint = pygame.font.SysFont('consolas,menlo,monospace', 16)
 
+    # --- selection state ---------------------------------------------------
+
+    @property
+    def selectable_modes(self) -> list[str]:
+        """Input modes the player can pick now. MIDI appears once a device is
+        configured (see set_midi_config)."""
+        modes = list(SELECTABLE_MODES)
+        if self.midi_config is not None:
+            modes.append('midi')
+        return modes
+
     @property
     def input_mode(self) -> str:
-        return SELECTABLE_MODES[self.mode_index]
+        modes = self.selectable_modes
+        return modes[self.mode_index % len(modes)]
 
-    def handle_event(self, event) -> StartGame | QuitGame | None:
+    @property
+    def keys_options(self) -> list[str]:
+        """'auto' plus the keyboard sizes that fit the configured device span."""
+        if self.midi_config is None:
+            return ['auto']
+        fitting = classes_within(self.midi_config.min_note, self.midi_config.max_note)
+        return ['auto'] + [c.name for c in fitting]
+
+    @property
+    def keys_mode(self) -> str:
+        opts = self.keys_options
+        return opts[self.keys_index % len(opts)]
+
+    def set_midi_config(self, config: MidiConfig | None) -> None:
+        """Apply a configured device, resetting mode/keys selection."""
+        self.midi_config = config
+        self.mode_index = 0
+        self.keys_index = 0
+
+    def midi_playable(self, song: SongEntry) -> bool:
+        """Whether *song* can be played on the current device + keys-mode."""
+        if self.midi_config is None:
+            return False
+        song_cls = keyboard_class_by_name(song.key_class)
+        if song_cls is None:
+            return False
+        if self.keys_mode == 'auto':
+            lo, hi = self.midi_config.min_note, self.midi_config.max_note
+        else:
+            chosen = keyboard_class_by_name(self.keys_mode)
+            lo, hi = chosen.midi_low, chosen.midi_high
+        return song_cls.midi_low >= lo and song_cls.midi_high <= hi
+
+    # --- events ------------------------------------------------------------
+
+    def handle_event(self, event) -> StartGame | QuitGame | OpenMidiSetup | None:
         if event.type != pygame.KEYDOWN:
             return None
         if event.key == pygame.K_ESCAPE:
             return QuitGame()
+        if event.key == pygame.K_m:
+            return OpenMidiSetup()
         if event.key == pygame.K_DOWN:
             self._move(1)
         elif event.key == pygame.K_UP:
             self._move(-1)
         elif event.key == pygame.K_RIGHT:
-            self.mode_index = (self.mode_index + 1) % len(SELECTABLE_MODES)
+            self.mode_index = (self.mode_index + 1) % len(self.selectable_modes)
         elif event.key == pygame.K_LEFT:
-            self.mode_index = (self.mode_index - 1) % len(SELECTABLE_MODES)
+            self.mode_index = (self.mode_index - 1) % len(self.selectable_modes)
+        elif event.key == pygame.K_k:
+            self.keys_index = (self.keys_index + 1) % len(self.keys_options)
         elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
             if self.songs:
-                return StartGame(self.songs[self.selected_index], self.input_mode)
+                song = self.songs[self.selected_index]
+                if self.input_mode == 'midi' and not self.midi_playable(song):
+                    return None  # song doesn't fit the device/keys; can't start
+                return StartGame(song, self.input_mode, self.keys_mode)
         return None
 
     def _move(self, delta: int) -> None:
@@ -218,6 +293,7 @@ class SongMenu:
             self._draw_empty(target)
 
         self._draw_mode_selector(target)
+        self._draw_keys_and_device(target)
         self._draw_hints(target)
 
     def _draw_list(self, target: pygame.Surface) -> None:
@@ -239,7 +315,7 @@ class SongMenu:
 
     def _draw_detail(self, target: pygame.Surface) -> None:
         song = self.songs[self.selected_index]
-        y = self.height - 170
+        y = self.height - 196
         parts = [song.title]
         if song.artist:
             parts.append(song.artist)
@@ -248,6 +324,11 @@ class SongMenu:
             parts.append(f"{int(song.bpm)} BPM")
         parts.append(_fmt_duration(song.total_duration_ms))
         target.blit(self._small.render('   '.join(parts), True, _MUTED), (60, y))
+        if self.input_mode == 'midi':
+            ok = self.midi_playable(song)
+            tag = '✓ fits your keyboard' if ok else '✗ needs a larger keyboard'
+            target.blit(self._small.render(tag, True, _OK if ok else _CENTER),
+                        (60, y + 24))
 
     def _draw_empty(self, target: pygame.Surface) -> None:
         msg = 'No songs found — add a folder under songs/ with a chart.mid.'
@@ -255,16 +336,17 @@ class SongMenu:
         target.blit(surf, surf.get_rect(center=(self.width // 2, self.height // 2 - 40)))
 
     def _draw_mode_selector(self, target: pygame.Surface) -> None:
-        y = self.height - 120
-        target.blit(self._small.render('MODE', True, _MUTED), (60, y - 24))
+        y = self.height - 150
+        target.blit(self._small.render('MODE', True, _MUTED), (60, y - 22))
+        selectable = self.selectable_modes
         x = 60
         for mode in _DISPLAY_MODES:
-            selectable = mode in SELECTABLE_MODES
+            is_sel = mode in selectable
             label = _MODE_LABELS[mode]
-            if not selectable:
+            if mode == 'midi' and not is_sel:
                 label += '  (no device)'
-            active = selectable and mode == self.input_mode
-            color = _HILITE if active else (_TEXT if selectable else _DISABLED)
+            active = is_sel and mode == self.input_mode
+            color = _HILITE if active else (_TEXT if is_sel else _DISABLED)
             surf = self._row.render(label, True, color)
             rect = pygame.Rect(x - 8, y - 4, surf.get_width() + 16, surf.get_height() + 8)
             if active:
@@ -273,7 +355,30 @@ class SongMenu:
             target.blit(surf, (x, y))
             x += surf.get_width() + 40
 
+    def _draw_keys_and_device(self, target: pygame.Surface) -> None:
+        y = self.height - 104
+        target.blit(self._small.render('KEYS', True, _MUTED), (60, y - 20))
+        x = 60
+        for opt in self.keys_options:
+            label = 'AUTO' if opt == 'auto' else opt
+            active = opt == self.keys_mode
+            surf = self._small.render(label, True, _HILITE if active else _TEXT)
+            if active:
+                pygame.draw.rect(target, _HILITE,
+                                 pygame.Rect(x - 6, y - 3, surf.get_width() + 12,
+                                             surf.get_height() + 6), 1)
+            target.blit(surf, (x, y))
+            x += surf.get_width() + 22
+
+        dy = self.height - 70
+        if self.midi_config is not None:
+            span = self.midi_config.max_note - self.midi_config.min_note + 1
+            text, color = (f'DEVICE: {self.midi_config.name}  ({span} keys)', _OK)
+        else:
+            text, color = ('DEVICE: none — press M to set up', _MUTED)
+        target.blit(self._small.render(text, True, color), (60, dy))
+
     def _draw_hints(self, target: pygame.Surface) -> None:
-        hint = '↑↓ select song    ←→ mode    Enter play    Esc quit'
+        hint = ('↑↓ song   ←→ mode   K keys   M midi setup   Enter play   Esc quit')
         surf = self._hint.render(hint, True, _MUTED)
-        target.blit(surf, (60, self.height - 44))
+        target.blit(surf, (60, self.height - 40))

@@ -40,6 +40,27 @@ _KEYBOARD_CLASSES: list[KeyboardClass] = [
 ]
 
 
+# Public, read-only view of the table (ordered smallest -> largest).
+KEYBOARD_CLASSES: list[KeyboardClass] = _KEYBOARD_CLASSES
+
+
+def keyboard_class_by_name(name: str) -> KeyboardClass | None:
+    """The KeyboardClass with this name (e.g. '49key'), or None."""
+    for kb_class in _KEYBOARD_CLASSES:
+        if kb_class.name == name:
+            return kb_class
+    return None
+
+
+def classes_within(min_note: int, max_note: int) -> list[KeyboardClass]:
+    """Keyboard classes whose full MIDI range fits inside [min_note, max_note].
+
+    Used to limit the selectable keys-mode to what a measured device span can
+    actually play (smallest -> largest)."""
+    return [c for c in _KEYBOARD_CLASSES
+            if c.midi_low >= min_note and c.midi_high <= max_note]
+
+
 def classify(notes: list[NoteEvent]) -> KeyboardClass:
     """Return the smallest KeyboardClass whose range covers all notes.
 
