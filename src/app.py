@@ -29,6 +29,7 @@ from src.audio.player import AudioPlayer
 from src.audio.synth import synthesize_midi_to_wav
 from src.ui.renderer import Renderer
 from src.ui.hud import HudOverlay
+from src.ui.results import ResultsScreen
 from src.ui.gl_overlay import SurfacePresenter
 from src.ui.menu import scan_songs, SongMenu, SongEntry, StartGame, QuitGame
 
@@ -192,6 +193,7 @@ class App:
         self._menu = SongMenu(self._songs, size)
         self._renderer = Renderer(size)
         self._hud = HudOverlay(size)
+        self._results = ResultsScreen(size)
         self._presenter = SurfacePresenter(size)
         self._surface = surface
         self._gl = False  # set True once run() opens a real OpenGL window
@@ -306,7 +308,14 @@ class App:
             if self._gl:
                 _gl_clear()
                 self._presenter.present(self._surface)
-        else:
+        elif self._screen is AppScreen.RESULTS:
+            if self._surface is not None and self._selection is not None:
+                entry, input_mode = self._selection
+                self._results.render(self._surface, self._scoring, entry, input_mode)
+            if self._gl:
+                _gl_clear()
+                self._presenter.present(self._surface)
+        else:  # PLAYING
             if self._surface is not None:
                 self._hud.render(
                     self._surface, self._scoring, state=self._engine.state,

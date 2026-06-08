@@ -47,7 +47,7 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 | 3.2 | Song selection screen (browse `songs/` directory) + menu→play→results loop | ✅ Done |
 | 3.3 | Renderer (decoupled from `Store`) | ✅ Done — OpenGL vanishing-point perspective (`src/ui/renderer.py`), atlas-textured |
 | 3.4 | HUD overlay (score, combo, accuracy, DEMO badge) | ✅ Done — `src/ui/hud.py`, composited over GL via `SurfacePresenter` |
-| 3.5 | Results screen (grade, score, accuracy) | 🔶 GL overlay reused by the RESULTS screen; full standalone screen pending |
+| 3.5 | Results screen (grade, score, accuracy) | ✅ Done — standalone `src/ui/results.py` (rank, score, accuracy, PERFECT/GREAT/GOOD/MISS, max combo, demo banner) |
 
 > **▶ Playable now:** `python mania.py` opens the **song-selection menu** over
 > `songs/` in an **OpenGL window** (↑↓ pick song · ←→ choose PC Keyboard / Demo,
@@ -62,7 +62,7 @@ Codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md)
 ## Session Log
 
 ### Session 10 (current)
-**Completed Phase 3.3 — OpenGL perspective renderer (texture-first) + Phase 3.4 GL HUD**
+**Completed Phase 3.3 — OpenGL perspective renderer (texture-first) + Phase 3.4 GL HUD + Phase 3.5 results screen**
 
 Design spec at [`ai-working-log/specs/2026-06-07-opengl-renderer-design.md`](ai-working-log/specs/2026-06-07-opengl-renderer-design.md).
 Replaced the 2D lane renderer with a DJmax-style **OpenGL vanishing-point
@@ -101,7 +101,17 @@ Testing (the project's headless TDD can't drive real GL):
   a hidden GL window and inspected the screenshots — perspective playfield with
   textured neon lanes, atlas hit bar, falling notes, and the HUD composited on top.
 
-**Suite: 284 tests headless (9 skip = 8 GL smoke + 1 pre-existing); the 8 GL smoke
+**Phase 3.5 — standalone results screen (`src/ui/results.py`):** a full-screen
+summary that replaces the playfield (not the HUD overlay) with song title/artist,
+input mode, a big neon-framed **RANK**, SCORE/ACCURACY/MAX COMBO, the per-judgment
+breakdown (PERFECT/GREAT/GOOD/MISS), a demo-mode banner, and the R-retry /
+Enter-Esc-menu prompt. `ScoringEngine` now exposes `perfect/great/good/miss`
+counts. The `App` RESULTS screen renders it (presented over a cleared GL frame);
+the single-song `run()` path still uses the HUD's FINISHED overlay. Tests:
+`test_results.py` (4, headless) + 3 scoring-count tests; verified visually via the
+GL App path (Cello Suite → RANK S, 656/0/0/0).
+
+**Suite: 291 tests headless (9 skip = 8 GL smoke + 1 pre-existing); the 8 GL smoke
 tests pass on a real OpenGL 4.6 context.**
 
 ### Session 9
