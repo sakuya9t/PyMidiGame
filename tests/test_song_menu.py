@@ -28,6 +28,8 @@ FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures')
 TWINKLE = os.path.join(FIXTURES, 'twinkle.mid')
 BACH = os.path.join(FIXTURES, 'bach-cello-type0.mid')
 
+SIZE = (1366, 768)  # shipping 16:9 resolution
+
 
 def _make_song(root, name, *, midi=TWINKLE, chart_name='chart.mid',
                meta=None, audio_ext=None):
@@ -136,7 +138,7 @@ class TestSongMenuNavigation(unittest.TestCase):
                          key_class='32key', total_duration_ms=1000.0, bpm=None)
 
     def _menu(self, n=3):
-        return SongMenu([self._entry('s%d' % i) for i in range(n)], (960, 720))
+        return SongMenu([self._entry('s%d' % i) for i in range(n)], SIZE)
 
     def _key(self, key):
         return pygame.event.Event(pygame.KEYDOWN, key=key)
@@ -180,7 +182,7 @@ class TestSongMenuNavigation(unittest.TestCase):
         self.assertIsInstance(m.handle_event(self._key(pygame.K_ESCAPE)), QuitGame)
 
     def test_enter_on_empty_library_is_noop(self):
-        m = SongMenu([], (960, 720))
+        m = SongMenu([], SIZE)
         self.assertIsNone(m.handle_event(self._key(pygame.K_RETURN)))
 
     def test_midi_is_not_selectable(self):
@@ -192,7 +194,7 @@ class TestSongMenuRender(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         pygame.init()
-        cls.surface = pygame.Surface((960, 720))
+        cls.surface = pygame.Surface(SIZE)
 
     @classmethod
     def tearDownClass(cls):
@@ -204,11 +206,11 @@ class TestSongMenuRender(unittest.TestCase):
                          key_class='49key', total_duration_ms=125000.0, bpm=120)
 
     def test_renders_populated_menu(self):
-        m = SongMenu([self._entry('a'), self._entry('b')], (960, 720))
+        m = SongMenu([self._entry('a'), self._entry('b')], SIZE)
         m.render(self.surface)  # must not raise
 
     def test_renders_empty_menu(self):
-        SongMenu([], (960, 720)).render(self.surface)  # must not raise
+        SongMenu([], SIZE).render(self.surface)  # must not raise
 
 
 if __name__ == '__main__':

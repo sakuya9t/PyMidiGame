@@ -77,6 +77,50 @@ class TestJudgmentCounts(unittest.TestCase):
         self.assertEqual((eng.perfect, eng.great, eng.good, eng.miss), (0, 0, 0, 0))
 
 
+class TestRecentHits(unittest.TestCase):
+    """Successful hits leave short-lived events the renderer turns into sparks."""
+
+    def test_successful_hit_records_a_fresh_event(self):
+        eng = _engine([_n(2, 1000)])
+        eng.register_hit(2, 1000)
+        hits = eng.recent_hits(1000)
+        self.assertEqual(len(hits), 1)
+        lane, intensity = hits[0]
+        self.assertEqual(lane, 2)
+        self.assertAlmostEqual(intensity, 1.0)
+
+    def test_stray_hit_records_no_event(self):
+        eng = _engine([_n(2, 1000)])
+        eng.register_hit(5, 1000)  # empty lane -> MISS, consumes no note
+        self.assertEqual(eng.recent_hits(1000), [])
+
+    def test_intensity_fades_with_age(self):
+        eng = _engine([_n(0, 1000)])
+        eng.register_hit(0, 1000)
+        fresh = eng.recent_hits(1000)[0][1]
+        aged = eng.recent_hits(1090)[0][1]
+        self.assertGreater(fresh, aged)
+
+    def test_event_expires_after_the_window(self):
+        eng = _engine([_n(0, 1000)])
+        eng.register_hit(0, 1000)
+        self.assertEqual(eng.recent_hits(5000), [])
+
+    def test_reset_clears_recent_hits(self):
+        notes = [_n(0, 1000)]
+        eng = _engine(notes)
+        eng.register_hit(0, 1000)
+        eng.reset(_chart(notes))
+        self.assertEqual(eng.recent_hits(1000), [])
+
+    def test_simultaneous_hits_in_different_lanes(self):
+        eng = _engine([_n(0, 1000), _n(3, 1000)])
+        eng.register_hit(0, 1000)
+        eng.register_hit(3, 1000)
+        lanes = sorted(lane for lane, _ in eng.recent_hits(1000))
+        self.assertEqual(lanes, [0, 3])
+
+
 class TestHitWindows(unittest.TestCase):
 
     def test_perfect_at_zero_offset(self):

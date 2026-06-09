@@ -11,21 +11,42 @@ renderer; this module owns only the flat overlay.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pygame
 
 from src.game.engine import GameState
-from src.ui.materials import NeonMaterialKit
+from src.ui.skin import NeonArcadeSkin
 
-# Colors (shared palette with the former 2D renderer).
-_BOARD_EDGE = (30, 175, 255)
-_CENTER = (255, 48, 70)
+
+@dataclass(frozen=True)
+class SongInfo:
+    """Metadata shown on the HUD song panel for the current run."""
+    title: str
+    artist: str | None = None
+    bpm: float | int | None = None
+    jacket: pygame.Surface | None = None
+
+# Colors used by the countdown / results overlays.
 _TEXT = (235, 245, 255)
-_MUTED_TEXT = (120, 170, 220)
-_DEMO = (255, 205, 80)
+
+# Neon-arcade HUD layout at the 1366x768 shipping resolution. Left-column panels
+# anchor to the left margin; the right column (score/combo) anchors to the right
+# margin. The central inspection band Rect(448, 70, 470, 560) is intentionally
+# left clear so the falling-note playfield stays visible underneath.
+_BASE_SIZE = (1366, 768)
+_SONG_RECT = pygame.Rect(28, 24, 404, 154)
+_GAUGE_RECT = pygame.Rect(28, 194, 356, 88)
+_STAT_RECT = pygame.Rect(28, 320, 174, 96)
+_SCORE_RECT = pygame.Rect(940, 24, 398, 130)
+_COMBO_RECT = pygame.Rect(998, 176, 340, 126)
 
 
 class HudOverlay:
-    """Draws the flat HUD/countdown/results layer onto a transparent surface."""
+    """Draws the flat HUD/countdown/results layer onto a transparent surface.
+
+    Layout/state only: the panel chrome is delegated to NeonArcadeSkin.
+    """
 
     def __init__(self, size: tuple[int, int]) -> None:
         self.width, self.height = size
@@ -33,8 +54,19 @@ class HudOverlay:
         self._font = pygame.font.SysFont('consolas,menlo,monospace', 22)
         self._big = pygame.font.SysFont('consolas,menlo,monospace', 120)
         self._mid = pygame.font.SysFont('consolas,menlo,monospace', 48)
-        self._score = pygame.font.SysFont('consolas,menlo,monospace', 54, bold=True)
-        self._materials = NeonMaterialKit()
+        self._skin = NeonArcadeSkin()
+        self._layout = self._build_layout(size)
+        self._song: SongInfo | None = None
+
+    @property
+    def song(self) -> SongInfo | None:
+        return self._song
+
+    def set_song(self, title: str, *, artist: str | None = None,
+                 bpm: float | int | None = None,
+                 jacket: pygame.Surface | None = None) -> None:
+        """Set the current song's metadata for the HUD song panel."""
+        self._song = SongInfo(title=title, artist=artist, bpm=bpm, jacket=jacket)
 
     def render(self, target: pygame.Surface, scoring, *, state: GameState,
                countdown: int = 0, is_demo: bool = False) -> None:
@@ -50,33 +82,22 @@ class HudOverlay:
     # --- pieces ------------------------------------------------------------
 
     def _draw_hud(self, target: pygame.Surface, scoring, is_demo: bool) -> None:
-        left = pygame.Rect(24, 22, 250, 116)
-        self._draw_panel(target, left, _BOARD_EDGE)
-        self._blit(target, "MIDIMANIA", left.x + 18, left.y + 16, color=_TEXT)
-        self._blit(target, f"ACC {scoring.accuracy * 100:5.1f}%",
-                   left.x + 18, left.y + 46, color=_MUTED_TEXT)
-        self._draw_gauge(target, left.x + 18, left.y + 82, left.width - 36,
-                         scoring.accuracy)
-
-        score_panel = pygame.Rect(self.width - 310, 22, 286, 116)
-        self._draw_panel(target, score_panel, _BOARD_EDGE)
-        self._blit(target, "SCORE", score_panel.x + 18, score_panel.y + 12,
-                   color=_BOARD_EDGE)
-        score = self._score.render(f"{scoring.score:07}", True, _TEXT)
-        target.blit(score, (score_panel.right - score.get_width() - 18,
-                            score_panel.y + 42))
-
-        combo_panel = pygame.Rect(self.width - 260, 156, 236, 92)
-        self._draw_panel(target, combo_panel, _CENTER)
-        self._blit(target, "COMBO", combo_panel.x + 18, combo_panel.y + 10,
-                   color=_CENTER)
-        combo = self._mid.render(f"{scoring.combo:04}", True, _TEXT)
-        target.blit(combo, (combo_panel.right - combo.get_width() - 18,
-                            combo_panel.y + 36))
-
-        if is_demo:
-            badge = self._font.render("DEMO", True, _DEMO)
-            target.blit(badge, (self.width - badge.get_width() - 12, 10))
+        song, gauge, stat, score, combo = self._layout
+        info = self._song
+        self._skin.draw_song_panel(
+            target, song,
+            title=info.title if info else 'MIDIMANIA',
+            artist=info.artist if info else None,
+            bpm=info.bpm if info else None,
+            jacket=info.jacket if info else None)
+        self._skin.draw_gauge_panel(target, gauge, value=scoring.accuracy,
+                                    label='ACCURACY')
+        self._skin.draw_small_stat_box(
+            target, stat, label='MODE', value='DEMO' if is_demo else 'LIVE',
+            color='red' if is_demo else 'blue')
+        self._skin.draw_score_panel(target, score, score=scoring.score)
+        self._skin.draw_combo_panel(target, combo, combo=scoring.combo,
+                                    full_combo=scoring.accuracy >= 1.0)
 
     def _draw_results(self, target: pygame.Surface, scoring) -> None:
         overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
@@ -90,18 +111,28 @@ class HudOverlay:
 
     # --- helpers -----------------------------------------------------------
 
-    def _draw_panel(self, target: pygame.Surface, rect: pygame.Rect,
-                    color: tuple[int, int, int]) -> None:
-        self._materials.draw_panel_frame(target, rect, color)
+    @staticmethod
+    def _build_layout(size: tuple[int, int]) -> tuple[pygame.Rect, ...]:
+        """Scale the base 1366x768 panel rects to *size*, anchoring columns.
 
-    def _draw_gauge(self, target: pygame.Surface, x: int, y: int,
-                    width: int, value: float) -> None:
-        rect = pygame.Rect(x, y - 4, width, 24)
-        self._materials.draw_segmented_gauge(target, rect, _BOARD_EDGE, value)
+        Left-column panels keep the left margin; the right column keeps the
+        right margin, so the layout stays balanced at other resolutions."""
+        width, height = size
+        scale = min(width / _BASE_SIZE[0], height / _BASE_SIZE[1])
+        right_margin = _BASE_SIZE[0] - _SCORE_RECT.right  # 28 px at base
 
-    def _blit(self, target: pygame.Surface, text: str, x: int, y: int,
-              *, color: tuple[int, int, int] = _TEXT) -> None:
-        target.blit(self._font.render(text, True, color), (x, y))
+        def place(rect: pygame.Rect, anchor: str) -> pygame.Rect:
+            w, h = int(rect.width * scale), int(rect.height * scale)
+            y = int(rect.y * scale)
+            if anchor == 'right':
+                x = width - int(right_margin * scale) - w
+            else:
+                x = int(rect.x * scale)
+            return pygame.Rect(x, y, w, h)
+
+        return (place(_SONG_RECT, 'left'), place(_GAUGE_RECT, 'left'),
+                place(_STAT_RECT, 'left'), place(_SCORE_RECT, 'right'),
+                place(_COMBO_RECT, 'right'))
 
     def _draw_center_text(self, target: pygame.Surface, text: str,
                           font: pygame.font.Font, dy: int = 0) -> None:

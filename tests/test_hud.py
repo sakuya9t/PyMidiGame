@@ -21,7 +21,7 @@ from src.ui.hud import HudOverlay
 from src.ui.materials import NeonMaterialKit
 from src.game.engine import GameState
 
-SIZE = (960, 720)
+SIZE = (1366, 768)
 
 
 class TestMaterialAtlas(unittest.TestCase):
@@ -90,6 +90,83 @@ class HudOverlayTest(unittest.TestCase):
         # A spot with no HUD element (dead center, mid-board) should be cleared.
         self.assertEqual(surf.get_at((SIZE[0] // 2, SIZE[1] // 2)),
                          pygame.Color(0, 0, 0, 0))
+
+
+class HudArcadeLayoutTest(unittest.TestCase):
+    """The HUD lays panels out per the neon-arcade skin spec at 1366x768."""
+
+    @classmethod
+    def setUpClass(cls):
+        pygame.init()
+        cls.hud = HudOverlay(SIZE)
+        cls.scoring = FakeScoring()
+
+    @classmethod
+    def tearDownClass(cls):
+        pygame.quit()
+
+    def _played(self):
+        surf = pygame.Surface(SIZE, pygame.SRCALPHA)
+        self.hud.render(surf, self.scoring, state=GameState.PLAYING,
+                        countdown=0, is_demo=False)
+        return surf
+
+    def test_song_panel_fills_left_column(self):
+        # (300, 80) is inside the wide song panel (28,24,404,154).
+        self.assertGreater(self._played().get_at((300, 80)).a, 0)
+
+    def test_gauge_panel_sits_below_song_panel(self):
+        # (200, 240) is inside the gauge panel (28,194,356,88).
+        self.assertGreater(self._played().get_at((200, 240)).a, 0)
+
+    def test_combo_panel_widened_to_the_left(self):
+        # (1010, 230) is inside the wider combo panel (998,176,340,126).
+        self.assertGreater(self._played().get_at((1010, 230)).a, 0)
+
+    def test_central_inspection_area_stays_transparent(self):
+        surf = self._played()
+        for point in [(683, 384), (683, 520), (500, 100), (700, 300),
+                      (900, 600), (683, 600)]:
+            self.assertEqual(surf.get_at(point), pygame.Color(0, 0, 0, 0),
+                             msg=f'opaque HUD pixel leaked into {point}')
+
+
+class HudSongMetadataTest(unittest.TestCase):
+    """The song panel reflects the current song's metadata once it's wired."""
+
+    @classmethod
+    def setUpClass(cls):
+        pygame.init()
+        cls.scoring = FakeScoring()
+
+    @classmethod
+    def tearDownClass(cls):
+        pygame.quit()
+
+    def _surf(self):
+        return pygame.Surface(SIZE, pygame.SRCALPHA)
+
+    def test_song_defaults_to_none(self):
+        self.assertIsNone(HudOverlay(SIZE).song)
+
+    def test_set_song_stores_metadata(self):
+        hud = HudOverlay(SIZE)
+        hud.set_song('Moonlight', artist='Beethoven', bpm=120)
+        self.assertEqual(hud.song.title, 'Moonlight')
+        self.assertEqual(hud.song.artist, 'Beethoven')
+        self.assertEqual(hud.song.bpm, 120)
+
+    def test_set_song_changes_song_panel_pixels(self):
+        hud = HudOverlay(SIZE)
+        before = self._surf()
+        hud.render(before, self.scoring, state=GameState.PLAYING)
+        hud.set_song('A Very Different Song Title')
+        after = self._surf()
+        hud.render(after, self.scoring, state=GameState.PLAYING)
+        region = pygame.Rect(28, 24, 404, 154)
+        self.assertNotEqual(
+            pygame.image.tostring(before.subsurface(region), 'RGBA'),
+            pygame.image.tostring(after.subsurface(region), 'RGBA'))
 
 
 if __name__ == '__main__':

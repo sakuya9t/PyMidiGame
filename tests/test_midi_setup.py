@@ -23,7 +23,7 @@ from src.ui.midi_setup import (
 from src.midi.device import MidiMsg
 
 PORTS = ['Focusrite USB MIDI 0', 'Oxygen Pro 49 1']
-SIZE = (960, 720)
+SIZE = (1366, 768)
 
 
 def _key(k):

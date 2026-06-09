@@ -19,8 +19,9 @@ class TestAtlasTable(unittest.TestCase):
     def test_atlas_size_matches_image(self):
         self.assertEqual(atlas.ATLAS_SIZE, (1254, 1254))
 
-    def test_has_three_color_families(self):
-        self.assertEqual(set(atlas.ATLAS_RECTS), {'blue', 'white', 'red'})
+    def test_has_three_color_families_plus_rank(self):
+        self.assertEqual(set(atlas.ATLAS_RECTS),
+                         {'blue', 'white', 'red', 'rank'})
 
     def test_blue_lane_rect_present(self):
         self.assertEqual(atlas.ATLAS_RECTS['blue']['lane'], (34, 72, 82, 498))
@@ -56,6 +57,63 @@ class TestUV(unittest.TestCase):
                 for c in (u0, v0, u1, v1):
                     self.assertGreaterEqual(c, 0.0)
                     self.assertLessEqual(c, 1.0)
+
+
+class TestNeonArcadeSkinRegions(unittest.TestCase):
+    """Phase 5 registers the HUD frames / FX measured in the skin spec."""
+
+    def test_score_panel_registered(self):
+        self.assertEqual(atlas.ATLAS_RECTS['blue']['score_panel'],
+                         (740, 67, 484, 101))
+
+    def test_combo_panel_registered(self):
+        self.assertEqual(atlas.ATLAS_RECTS['red']['combo_panel'],
+                         (739, 214, 483, 90))
+
+    def test_first_pass_blue_panels_present(self):
+        for name in ('song_info_panel', 'gauge_panel', 'small_stat_box',
+                     'generic_wide_panel', 'gauge_overlay_glow'):
+            self.assertIn(name, atlas.ATLAS_RECTS['blue'])
+
+    def test_impact_spark_in_every_family(self):
+        for family in ('blue', 'white', 'red'):
+            self.assertIn('impact_spark', atlas.ATLAS_RECTS[family])
+
+    def test_glint_tiny_in_every_family(self):
+        for family in ('blue', 'white', 'red'):
+            self.assertIn('glint_tiny', atlas.ATLAS_RECTS[family])
+
+    def test_rank_badges_registered(self):
+        for name in ('rank_c', 'rank_b', 'rank_a', 'rank_s', 'rank_s_plus'):
+            self.assertIn(name, atlas.ATLAS_RECTS['rank'])
+
+    def test_rank_s_rect(self):
+        self.assertEqual(atlas.ATLAS_RECTS['rank']['rank_s'], (394, 1177, 57, 60))
+
+
+class TestNineSliceBorders(unittest.TestCase):
+    """Measured nine-slice borders, ordered (left, top, right, bottom)."""
+
+    def test_score_panel_border(self):
+        self.assertEqual(atlas.nine_slice('blue', 'score_panel'),
+                         (42, 24, 50, 26))
+
+    def test_combo_panel_border(self):
+        self.assertEqual(atlas.nine_slice('red', 'combo_panel'),
+                         (42, 22, 44, 26))
+
+    def test_song_info_panel_border(self):
+        self.assertEqual(atlas.nine_slice('blue', 'song_info_panel'),
+                         (92, 18, 30, 34))
+
+    def test_unknown_nine_slice_returns_none(self):
+        self.assertIsNone(atlas.nine_slice('blue', 'lane'))
+        self.assertIsNone(atlas.nine_slice('green', 'score_panel'))
+
+    def test_every_nine_slice_target_is_a_registered_rect(self):
+        for family, names in atlas.NINE_SLICE_BORDERS.items():
+            for name in names:
+                self.assertIn(name, atlas.ATLAS_RECTS.get(family, {}))
 
 
 if __name__ == '__main__':

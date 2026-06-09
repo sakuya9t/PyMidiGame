@@ -36,6 +36,14 @@ _JUDGMENTS = (
     ('MISS', 'miss', (255, 90, 110)),
 )
 
+# Rank letter -> atlas badge region. D has no badge (drawn letter fallback).
+_RANK_BADGES = {'S': 'rank_s', 'A': 'rank_a', 'B': 'rank_b', 'C': 'rank_c'}
+
+
+def rank_badge_name(rank: str) -> str | None:
+    """Atlas badge region for a rank letter, or None to draw the letter."""
+    return _RANK_BADGES.get(rank)
+
 
 class ResultsScreen:
     """Draws the full results screen onto a surface."""
@@ -80,8 +88,15 @@ class ResultsScreen:
         self._materials.draw_panel_frame(target, panel, color)
         self._blit_center(target, 'RANK', self._label, _MUTED,
                           (panel.centerx, panel.top + 44))
-        letter = self._rank_letter.render(rank, True, color)
-        target.blit(letter, letter.get_rect(center=(panel.centerx, panel.centery + 22)))
+        center = (panel.centerx, panel.centery + 22)
+        badge = rank_badge_name(rank)
+        badge_rect = pygame.Rect(0, 0, 176, 176)
+        badge_rect.center = center
+        if not (badge and self._materials.draw_asset(target, 'rank', badge,
+                                                     badge_rect)):
+            # No atlas badge for this rank (or atlas missing): draw the letter.
+            letter = self._rank_letter.render(rank, True, color)
+            target.blit(letter, letter.get_rect(center=center))
 
     def _draw_stats_panel(self, target, scoring) -> None:
         panel = pygame.Rect(456, 210, self.width - 456 - 60, 320)

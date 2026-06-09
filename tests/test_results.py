@@ -17,10 +17,10 @@ os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 
 import pygame
 
-from src.ui.results import ResultsScreen
+from src.ui.results import ResultsScreen, rank_badge_name
 from src.ui.menu import SongEntry
 
-SIZE = (960, 720)
+SIZE = (1366, 768)
 
 
 class FakeScoring:
@@ -68,6 +68,22 @@ class ResultsScreenTest(unittest.TestCase):
     def test_empty_artist_renders(self):
         surf = self._surface()
         self.screen.render(surf, self.scoring, _entry(artist=''), 'pc')
+
+    def test_rank_badge_name_maps_letters_to_atlas_badges(self):
+        self.assertEqual(rank_badge_name('S'), 'rank_s')
+        self.assertEqual(rank_badge_name('A'), 'rank_a')
+        self.assertEqual(rank_badge_name('B'), 'rank_b')
+        self.assertEqual(rank_badge_name('C'), 'rank_c')
+
+    def test_rank_badge_name_returns_none_for_d(self):
+        # No D badge in the atlas; results falls back to the drawn letter.
+        self.assertIsNone(rank_badge_name('D'))
+
+    def test_every_rank_renders_without_error(self):
+        for rank in ('S', 'A', 'B', 'C', 'D'):
+            scoring = FakeScoring()
+            scoring.rank = lambda r=rank: r
+            self.screen.render(self._surface(), scoring, _entry(), 'pc')
 
     def test_background_is_opaque(self):
         # The results screen replaces the view, so every pixel must be opaque

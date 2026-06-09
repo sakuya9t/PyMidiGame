@@ -31,6 +31,7 @@ from src.audio.player import AudioPlayer
 from src.audio.synth import synthesize_midi_to_wav
 from src.ui.renderer import Renderer
 from src.ui.hud import HudOverlay
+from src.ui.materials import NeonMaterialKit
 from src.ui.results import ResultsScreen
 from src.ui.gl_overlay import SurfacePresenter
 from src.ui.midi_setup import (
@@ -40,7 +41,7 @@ from src.ui.menu import (
     scan_songs, SongMenu, SongEntry, StartGame, QuitGame, OpenMidiSetup, MidiConfig,
 )
 
-SIZE = (960, 720)
+SIZE = (1366, 768)  # 16:9
 
 
 def _open_gl_window(size: tuple[int, int]) -> pygame.Surface:
@@ -82,6 +83,19 @@ def make_engine(chart: Chart, clock, *, demo: bool = True):
 def build_keymap(lane_count: int) -> dict[int, int]:
     """Map pygame key codes to lane indices (best-effort for up to 9 PC lanes)."""
     return {key: lane for lane, key in enumerate(PC_KEYS) if lane < lane_count}
+
+
+# Per-song cover art file names tried in the song folder, in preference order.
+JACKET_NAMES = ('jacket.png', 'cover.png')
+
+
+def _load_jacket(song_dir: str) -> pygame.Surface | None:
+    """Load a song's cover art from its folder, or None to use the placeholder."""
+    for name in JACKET_NAMES:
+        surf = NeonMaterialKit.load_optional_ui_image(os.path.join(song_dir, name))
+        if surf is not None:
+            return surf
+    return None
 
 
 # Produced-audio extensions tried when pairing with a MIDI, in preference order.
@@ -163,7 +177,8 @@ def run(midi_path: str, audio_path: str | None = None, *,
                     engine.resume() if engine.state.name == 'PAUSED' else engine.pause()
 
         engine.update(dt_ms)
-        renderer.render(chart, engine.current_ms())
+        now = engine.current_ms()
+        renderer.render(chart, now, sparks=scoring.recent_hits(now))
         hud.render(overlay, scoring, state=engine.state,
                    countdown=engine.countdown_value(), is_demo=engine.is_demo())
         presenter.present(overlay)
@@ -280,6 +295,8 @@ class App:
         self._engine, self._scoring = make_engine(self._chart, clock, demo=demo)
         self._keymap = build_keymap(self._chart.lane_count)
         self._selection = (entry, input_mode, keys_mode)
+        self._hud.set_song(entry.title, artist=entry.artist or None,
+                           bpm=entry.bpm, jacket=_load_jacket(entry.dir))
         self._engine.start()
         self._screen = AppScreen.PLAYING
 
@@ -421,7 +438,9 @@ class App:
                     countdown=self._engine.countdown_value(),
                     is_demo=self._engine.is_demo())
             if self._gl:
-                self._renderer.render(self._chart, self._engine.current_ms())
+                now = self._engine.current_ms()
+                sparks = self._scoring.recent_hits(now)
+                self._renderer.render(self._chart, now, sparks=sparks)
                 self._presenter.present(self._surface)
 
     def step(self, dt_ms: float, events) -> bool:

@@ -19,7 +19,7 @@ from src.ui.menu import (
     SongMenu, SongEntry, StartGame, OpenMidiSetup, MidiConfig,
 )
 
-SIZE = (960, 720)
+SIZE = (1366, 768)
 CONFIG = MidiConfig(name='Oxygen Pro 49 1', min_note=36, max_note=84)  # 49-key span
 
 
