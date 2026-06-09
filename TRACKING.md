@@ -66,11 +66,15 @@ Detailed per-feature design specs: [`ai-working-log/specs/`](ai-working-log/spec
 | 5.3 | `src/ui/skin.py` `NeonArcadeSkin` (score/combo/song/gauge/stat) | ✅ |
 | 5.4 | `HudOverlay` delegates panel visuals; 1366x768 arcade layout | ✅ |
 | 5.5 | GL lanes: subtle atlas texture overlay (readability-scaled) | ✅ |
+| 5.6 | Song metadata (title/artist/BPM/jacket) wired into the HUD | ✅ |
+| 5.7 | Results rank badges (atlas `rank` family) | ✅ |
+| 5.8 | Hit sparks at the hit bar (scoring hit-event stream → GL) | ✅ |
 
-Remaining: hit-effect/combo animation through the HUD effects path · large-keyboard
-scrolling viewport (49key+) · results rank badges (4th atlas family) · optional
-GL stage background · cross-platform verification · PyInstaller packaging. See
-the skin spec ([`specs/2026-06-08-neon-arcade-ui-skin.md`](ai-working-log/specs/2026-06-08-neon-arcade-ui-skin.md))
+Remaining: combo-pop / score-tick animation · large-keyboard scrolling viewport
+(49key+) · optional GL stage background (deferred — needs a background quad behind
+the board that preserves the dark readable playfield center) · cross-platform
+verification · PyInstaller packaging. See the skin spec
+([`specs/2026-06-08-neon-arcade-ui-skin.md`](ai-working-log/specs/2026-06-08-neon-arcade-ui-skin.md))
 and DESIGN.md → *Remaining / Future Work*.
 
 > **▶ Playable now:** `python mania.py` opens the **song-selection menu** over
@@ -80,7 +84,7 @@ and DESIGN.md → *Remaining / Future Work*.
 > key), then play with real keys. `python mania.py SONG.mid` plays one chart
 > directly (`--play` for PC keyboard, P pause, Esc back).
 
-**Suite: 369 tests headless · 0 failures · 8 skip (GL smoke tests — need a real
+**Suite: 386 tests headless · 0 failures · 9 skip (GL smoke tests — need a real
 OpenGL context).**
 
 ---
@@ -137,5 +141,11 @@ Condensed from session history; the detailed reasoning lives in the linked specs
   glow-text/additive/noise helpers; new `NeonArcadeSkin` owns per-panel visuals so
   `HudOverlay` is layout-only. Everything **degrades to drawn frames** when the
   atlas/optional bitmaps are missing. GL lanes get a **readability-scaled** texture
-  overlay (fades 0.22→0.08 as lanes thin). Rank badges deferred (would add a 4th
-  atlas family); song metadata still a placeholder pending app wiring.
+  overlay (fades 0.22→0.08 as lanes thin). Follow-ups since landed: **song metadata**
+  (`HudOverlay.set_song`, per-song `jacket.png`/`cover.png` → placeholder fallback);
+  **results rank badges** (atlas `rank` family — name-only, never in the lane/note
+  color lookup; D falls back to the drawn letter); **hit sparks** —
+  `ScoringEngine.recent_hits(now)` exposes (lane, intensity) events fading over
+  180 ms, which the renderer blooms as `impact_spark` at the hit bar (kept out of
+  the engine; scoring already owns hit state). Still open: optional GL stage
+  background, combo/score animation.
