@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import math
+import random
 
 import pygame
 
@@ -286,6 +287,106 @@ class NeonMaterialKit:
             panel.fill((255, 255, 255, alpha), special_flags=pygame.BLEND_RGBA_MULT)
         surface.blit(panel, rect.topleft)
         return True
+
+    # --- glow text + runtime overlays -------------------------------------
+
+    # Eight-direction halo offsets for the additive glow pass.
+    _GLOW_OFFSETS = ((-2, 0), (2, 0), (0, -2), (0, 2),
+                     (-1, -1), (1, 1), (-1, 1), (1, -1))
+
+    def draw_glow_text(self, surface: pygame.Surface, font: pygame.font.Font,
+                       text: str, pos: Point | pygame.Rect, color: Color,
+                       glow_color: Color, *, align: str = 'left') -> pygame.Rect:
+        """Draw *text* with an additive glow halo, crisp foreground on top.
+
+        *pos* is a point (anchored per *align*: 'left'→topleft, 'center'→center,
+        'right'→topright) or a Rect (the text is placed against the matching
+        edge). Deterministic: no per-frame jitter. Returns the foreground rect.
+        """
+        base = font.render(text, True, color)
+        rect = base.get_rect()
+        if isinstance(pos, pygame.Rect):
+            if align == 'center':
+                rect.center = pos.center
+            elif align == 'right':
+                rect.midright = pos.midright
+            else:
+                rect.midleft = pos.midleft
+        else:
+            if align == 'center':
+                rect.center = (int(pos[0]), int(pos[1]))
+            elif align == 'right':
+                rect.topright = (int(pos[0]), int(pos[1]))
+            else:
+                rect.topleft = (int(pos[0]), int(pos[1]))
+
+        pad = 6
+        glow = font.render(text, True, glow_color)
+        halo = pygame.Surface((rect.width + pad * 2, rect.height + pad * 2),
+                              pygame.SRCALPHA)
+        for dx, dy in self._GLOW_OFFSETS:
+            halo.blit(glow, (pad + dx, pad + dy),
+                      special_flags=pygame.BLEND_RGBA_ADD)
+        halo.fill((255, 255, 255, 120), special_flags=pygame.BLEND_RGBA_MULT)
+        surface.blit(halo, (rect.x - pad, rect.y - pad))
+        surface.blit(base, rect)  # crisp foreground last
+        return rect
+
+    def draw_additive_asset(self, surface: pygame.Surface, family: str,
+                            name: str, rect: pygame.Rect, *,
+                            alpha: int = 255) -> bool:
+        """Blit an atlas asset additively (BLEND_RGBA_ADD) for glow/spark FX.
+
+        Returns False if the asset is unavailable, leaving *surface* untouched."""
+        asset = self._asset(family, name, rect.size)
+        if asset is None:
+            return False
+        textured = asset.copy()
+        if alpha < 255:
+            textured.fill((255, 255, 255, alpha),
+                          special_flags=pygame.BLEND_RGBA_MULT)
+        surface.blit(textured, rect.topleft, special_flags=pygame.BLEND_RGBA_ADD)
+        return True
+
+    @staticmethod
+    def make_noise_tile(size: tuple[int, int], *, seed: int = 0) -> pygame.Surface:
+        """Deterministic sparse low-alpha noise tile for panel interiors."""
+        w, h = size
+        tile = pygame.Surface(size, pygame.SRCALPHA)
+        rng = random.Random(seed)
+        count = max(1, (w * h) // 22)
+        palette = ((90, 170, 255), (255, 80, 110), (235, 245, 255))
+        for _ in range(count):
+            x = rng.randrange(w)
+            y = rng.randrange(h)
+            color = palette[rng.randrange(len(palette))]
+            tile.set_at((x, y), (*color, rng.randint(8, 22)))
+        return tile
+
+    @staticmethod
+    def make_scanline_tile(size: tuple[int, int] = (4, 4)) -> pygame.Surface:
+        """Transparent tile with a single faint horizontal scanline."""
+        w, h = size
+        tile = pygame.Surface(size, pygame.SRCALPHA)
+        pygame.draw.line(tile, (255, 255, 255, 18), (0, 0), (w - 1, 0))
+        return tile
+
+    @staticmethod
+    def load_optional_ui_image(path: str) -> pygame.Surface | None:
+        """Load a UI image, or None if it is missing or unreadable.
+
+        Avoids convert_alpha() when no display mode is set so it stays usable in
+        headless tests; callers must keep working without the image."""
+        if not path or not os.path.exists(path):
+            return None
+        try:
+            surf = pygame.image.load(path)
+        except pygame.error:
+            return None
+        try:
+            return surf.convert_alpha()
+        except pygame.error:
+            return surf
 
     def draw_segmented_gauge(self, surface: pygame.Surface, rect: pygame.Rect,
                              color: Color, value: float, *, segments: int = 18) -> None:
