@@ -23,7 +23,7 @@ from __future__ import annotations
 import pygame
 from OpenGL.GL import (
     GL_BLEND, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_DEPTH_TEST,
-    GL_LINES, GL_MODELVIEW, GL_ONE_MINUS_SRC_ALPHA, GL_PROJECTION, GL_QUADS,
+    GL_LINES, GL_MODELVIEW, GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_PROJECTION, GL_QUADS,
     GL_SRC_ALPHA, GL_TEXTURE_2D, glBegin, glBlendFunc, glClear, glClearColor,
     glColor4f, glDisable, glEnable, glEnd, glLineWidth, glLoadIdentity,
     glMatrixMode, glVertex3f, glTexCoord2f, glViewport,
@@ -50,15 +50,21 @@ _FOV_Y = 50.0
 # --- colors (RGBA, 0..1) ---------------------------------------------------
 _BG = (0.015, 0.03, 0.07, 1.0)
 _BOARD = (0.03, 0.05, 0.10, 1.0)
-_LANE_WHITE = (0.88, 0.91, 0.98, 0.62)   # white (natural) key lane
-_LANE_BLACK = (0.10, 0.34, 0.85, 0.70)   # black (accidental) key lane -> blue
-_LANE_RED = (0.95, 0.22, 0.34, 0.55)     # PC-mode center (space-bar) lane
-_DIVIDER = (0.20, 0.27, 0.42, 0.45)      # subtle, so lane fills read clearly
+_LANE_WHITE = (0.035, 0.045, 0.065, 0.52)  # dark glass, not a white floor stripe
+_LANE_BLACK = (0.015, 0.050, 0.110, 0.56)  # faint blue tint for black keys
+_LANE_RED = (0.090, 0.018, 0.030, 0.50)    # subtle PC center-lane tint
+_DIVIDER_GLOW = (0.05, 0.38, 1.00, 0.22)
+_DIVIDER_CORE = (0.78, 0.88, 1.00, 0.64)
 _LANE_FILL = {'white': _LANE_WHITE, 'blue': _LANE_BLACK, 'red': _LANE_RED}
 _HOLD_TINT = (1.0, 1.0, 1.0, 0.85)
 _NOTE_TINT = (1.0, 1.0, 1.0, 1.0)
 _NOTE_HIT = (0.35, 0.95, 0.65, 1.0)
 _NOTE_MISS = (0.42, 0.20, 0.28, 0.7)
+_FX_TINT = {
+    'blue': (0.08, 0.48, 1.0),
+    'white': (0.90, 0.95, 1.0),
+    'red': (1.0, 0.10, 0.18),
+}
 
 # MIDI pitch classes of the black keys (C#, D#, F#, G#, A#).
 _BLACK_KEYS = frozenset({1, 3, 6, 8, 10})
@@ -72,13 +78,14 @@ def is_black_key(note: int) -> bool:
 def lane_overlay_alpha(lane_count: int) -> float:
     """Alpha for the lane atlas texture drawn over the flat lane color.
 
-    Subtle by design, and subtler as lanes get thinner: at 49-key MIDI width a
-    busy texture would fight note readability, so it fades toward a faint wash."""
+    Extremely subtle by design: the atlas lane sprites are opaque blue/white/red,
+    so they are used only as a low-alpha detail wash over a dark glass lane.
+    At large MIDI lane counts the texture fades further to protect readability."""
     if lane_count <= 12:
-        return 0.22
+        return 0.055
     if lane_count <= 25:
-        return 0.14
-    return 0.08
+        return 0.035
+    return 0.018
 
 
 def lane_family(lane: int, mode: str, midi_low: int, lane_count: int) -> str:
@@ -152,10 +159,10 @@ class Renderer:
             left, right = geometry.lane_bounds_world(lane, lane_count,
                                                      BOARD_LEFT, BOARD_RIGHT)
             # Two passes: a flat key color for clarity, then the lane atlas
-            # texture at low alpha for arcade detail. MIDI: white keys light,
-            # black keys blue. PC: alternate white/blue, red center lane. The
-            # overlay fades on thin 49-key lanes so notes stay readable, and is
-            # skipped entirely on the flat-color (no-atlas) fallback path.
+            # texture at very low alpha for arcade detail. MIDI: natural keys
+            # are dark neutral, black keys carry a faint blue tint. PC keeps the
+            # red center-lane identity without turning the highway into colored
+            # floor stripes.
             family = lane_family(lane, chart.mode, midi_low, lane_count)
             self._textured_quad(
                 _flat_quad(left, right, BOARD_FAR_Z, BOARD_NEAR_Z, y=0.01),
@@ -165,15 +172,17 @@ class Renderer:
                     _flat_quad(left, right, BOARD_FAR_Z, BOARD_NEAR_Z, y=0.011),
                     self._atlas.uv(family, 'lane'), overlay_tint)
 
-        # Lane dividers (uniform; no special center lane).
-        glLineWidth(1.5)
-        glColor4f(*_DIVIDER)
-        glBegin(GL_LINES)
-        for i in range(lane_count + 1):
-            x = BOARD_LEFT + (BOARD_RIGHT - BOARD_LEFT) * i / lane_count
-            glVertex3f(x, 0.02, BOARD_FAR_Z)
-            glVertex3f(x, 0.02, BOARD_NEAR_Z)
-        glEnd()
+        # Lane dividers: soft blue bloom underneath, crisp pale core on top.
+        for width, color, y in ((5.0, _DIVIDER_GLOW, 0.022),
+                                (1.4, _DIVIDER_CORE, 0.024)):
+            glLineWidth(width)
+            glColor4f(*color)
+            glBegin(GL_LINES)
+            for i in range(lane_count + 1):
+                x = BOARD_LEFT + (BOARD_RIGHT - BOARD_LEFT) * i / lane_count
+                glVertex3f(x, y, BOARD_FAR_Z)
+                glVertex3f(x, y, BOARD_NEAR_Z)
+            glEnd()
 
     def _draw_hit_bar(self) -> None:
         self._textured_quad(
@@ -217,16 +226,53 @@ class Renderer:
         lane_count = chart.lane_count
         midi_low = chart.kb_class.midi_low
         lane_w = (BOARD_RIGHT - BOARD_LEFT) / lane_count
-        half = max(lane_w * 0.9, 0.4)  # thin 49-key lanes still get a visible spark
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE)
         for lane, intensity in sparks:
             intensity = max(0.0, min(1.0, intensity))
             if intensity <= 0.0:
                 continue
             cx = geometry.lane_world_x(lane, lane_count, BOARD_LEFT, BOARD_RIGHT)
             family = lane_family(lane, chart.mode, midi_low, lane_count)
+            color = _FX_TINT[family]
+            pop = intensity ** 0.55
+            lane_left, lane_right = geometry.lane_bounds_world(
+                lane, lane_count, BOARD_LEFT, BOARD_RIGHT)
+
+            # Lane-local shock lines make the hit read even when the atlas
+            # spark lands between bright note/hold art, without leaving a
+            # rectangular translucent slab behind.
+            z_far = HIT_Z - 1.65 - 0.65 * pop
+            z_near = HIT_Z + 0.52
+            self._draw_fx_line((cx, 0.064, z_far), (cx, 0.064, z_near),
+                               color, 0.50 * pop, 9.0)
+            self._draw_fx_line((lane_left, 0.063, z_far), (lane_left, 0.063, z_near),
+                               color, 0.25 * pop, 3.0)
+            self._draw_fx_line((lane_right, 0.063, z_far), (lane_right, 0.063, z_near),
+                               color, 0.25 * pop, 3.0)
+            self._draw_fx_line((cx - lane_w * 1.9, 0.068, HIT_Z),
+                               (cx + lane_w * 1.9, 0.068, HIT_Z),
+                               color, 0.58 * pop, 13.0)
+            self._draw_fx_line((cx - lane_w * 1.4, 0.069, HIT_Z + 0.02),
+                               (cx + lane_w * 1.4, 0.069, HIT_Z + 0.02),
+                               (1.0, 1.0, 1.0), 0.28 * pop, 4.0)
+
+            half = max(lane_w * (1.25 + 0.45 * pop), 0.56)
             self._textured_quad(
-                _flat_quad(cx - half, cx + half, HIT_Z - half, HIT_Z + half, y=0.06),
-                self._atlas.uv(family, 'impact_spark'), (1.0, 1.0, 1.0, intensity))
+                _flat_quad(cx - half, cx + half, HIT_Z - half, HIT_Z + half, y=0.070),
+                self._atlas.uv(family, 'impact_spark'), (1.0, 1.0, 1.0, pop))
+            self._draw_fx_line((cx - lane_w * 0.34, 0.075, HIT_Z),
+                               (cx + lane_w * 0.34, 0.075, HIT_Z),
+                               (1.0, 1.0, 1.0), 0.62 * pop, 7.0)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+    @staticmethod
+    def _draw_fx_line(start, end, color, alpha: float, width: float) -> None:
+        glLineWidth(width)
+        glColor4f(color[0], color[1], color[2], alpha)
+        glBegin(GL_LINES)
+        glVertex3f(*start)
+        glVertex3f(*end)
+        glEnd()
 
     # --- primitive ---------------------------------------------------------
 

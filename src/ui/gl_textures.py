@@ -26,6 +26,7 @@ from OpenGL.GL import (
 )
 
 from src.ui import atlas as _atlas
+from src.ui.atlas_surface import prepare_atlas_surface
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_ATLAS = os.path.join(_ROOT, 'resources', 'ui', 'neon_texture_atlas.png')
@@ -62,7 +63,7 @@ class AtlasTexture:
         self._surface: pygame.Surface | None = None
         if os.path.exists(path):
             try:
-                self._surface = pygame.image.load(path)
+                self._surface = prepare_atlas_surface(pygame.image.load(path))
             except pygame.error:
                 self._surface = None
 

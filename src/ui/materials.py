@@ -15,6 +15,7 @@ import random
 import pygame
 
 from src.ui.atlas import ATLAS_RECTS, nine_slice
+from src.ui.atlas_surface import prepare_atlas_surface
 
 Color = tuple[int, int, int]
 Point = tuple[float, float]
@@ -67,7 +68,7 @@ class NeonMaterialKit:
         self._cache: dict[tuple[str, str, tuple[int, int]], pygame.Surface] = {}
         if os.path.exists(self.atlas_path):
             try:
-                self._atlas = pygame.image.load(self.atlas_path)
+                self._atlas = prepare_atlas_surface(pygame.image.load(self.atlas_path))
             except pygame.error:
                 self._atlas = None
 

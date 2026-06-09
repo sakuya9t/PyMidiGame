@@ -52,14 +52,14 @@ class TestLaneFamily(unittest.TestCase):
 
 
 class TestLaneOverlayAlpha(unittest.TestCase):
-    """The lane atlas overlay is subtle, and subtler still on thin 49-key lanes
-    so note readability beats texture density."""
+    """The lane atlas overlay is a very faint detail wash over dark glass lanes,
+    and fades further on thin 49-key layouts so texture density stays readable."""
 
-    def test_few_wide_lanes_get_a_visible_overlay(self):
-        self.assertGreaterEqual(lane_overlay_alpha(9), 0.2)
+    def test_few_wide_lanes_get_only_a_faint_overlay(self):
+        self.assertLessEqual(lane_overlay_alpha(9), 0.06)
 
     def test_many_thin_lanes_get_a_faint_overlay(self):
-        self.assertLessEqual(lane_overlay_alpha(49), 0.1)
+        self.assertLessEqual(lane_overlay_alpha(49), 0.02)
 
     def test_alpha_never_increases_with_lane_count(self):
         counts = [4, 9, 12, 13, 25, 26, 49, 61, 88]
@@ -70,7 +70,7 @@ class TestLaneOverlayAlpha(unittest.TestCase):
     def test_alpha_stays_a_subtle_wash(self):
         for n in (1, 9, 25, 49, 88):
             self.assertGreater(lane_overlay_alpha(n), 0.0)
-            self.assertLessEqual(lane_overlay_alpha(n), 0.3)
+            self.assertLessEqual(lane_overlay_alpha(n), 0.06)
 
 
 if __name__ == '__main__':

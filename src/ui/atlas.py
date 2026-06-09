@@ -107,6 +107,14 @@ NINE_SLICE_BORDERS: dict[str, dict[str, tuple[int, int, int, int]]] = {
 UV = tuple[float, float, float, float]
 Border = tuple[int, int, int, int]
 
+# Atlas FX sprites were authored on an opaque dark background. Runtime loaders
+# use these regions to suppress near-black pixels before additive blending.
+FX_ALPHA_KEY_REGIONS = (
+    ('blue', 'spark'), ('white', 'spark'), ('red', 'spark'),
+    ('blue', 'impact_spark'), ('white', 'impact_spark'), ('red', 'impact_spark'),
+    ('blue', 'glint_tiny'), ('white', 'glint_tiny'), ('red', 'glint_tiny'),
+)
+
 
 def uv(family: str, name: str) -> UV | None:
     """Texture coordinates (u0, v0, u1, v1) for a named region, or None if absent.

@@ -33,7 +33,7 @@ GREAT_MS = 75.0
 GOOD_MS = 120.0
 
 # How long a successful hit lingers as a renderer spark (ms).
-HIT_FX_WINDOW_MS = 180.0
+HIT_FX_WINDOW_MS = 260.0
 
 _MULTIPLIER = {
     'PERFECT': 1.0,
