@@ -13,10 +13,14 @@ import math
 
 import pygame
 
-from src.ui.atlas import ATLAS_RECTS
+from src.ui.atlas import ATLAS_RECTS, nine_slice
 
 Color = tuple[int, int, int]
 Point = tuple[float, float]
+Border = tuple[int, int, int, int]
+
+# Default dark, translucent fill for nine-slice panel interiors.
+_PANEL_INTERIOR = (8, 13, 24, 208)
 
 
 def _clamp(value: int, lo: int = 0, hi: int = 255) -> int:
@@ -217,6 +221,72 @@ class NeonMaterialKit:
             pygame.draw.line(surface, (*color, 170), (x, rect.top + 18),
                              (x + 1, rect.top + 18), 2)
 
+    def draw_nine_slice(self, surface: pygame.Surface, family: str, name: str,
+                        rect: pygame.Rect, border: Border | None = None, *,
+                        alpha: int = 255,
+                        fill: tuple[int, int, int, int] = _PANEL_INTERIOR,
+                        interior: pygame.Surface | None = None) -> bool:
+        """Draw a nine-slice atlas panel, stretching edges but not corners.
+
+        Corners blit at native size; the four edges stretch along one axis; the
+        center is filled with *fill* (and an optional *interior* texture) rather
+        than stretching the source middle, which may carry baked labels.
+
+        Returns False — leaving *surface* untouched — when the atlas asset or a
+        border is unavailable, or when *rect* is too small to hold the borders,
+        so callers can fall back to drawn frames.
+        """
+        if border is None:
+            border = nine_slice(family, name)
+        if border is None:
+            return False
+        source = self._source(family, name)
+        if source is None:
+            return False
+
+        left, top, right, bottom = border
+        sw, sh = source.get_size()
+        if rect.width < left + right or rect.height < top + bottom:
+            return False
+        if left + right >= sw or top + bottom >= sh:
+            return False
+
+        cw = rect.width - left - right       # center width (dest and src share it)
+        ch = rect.height - top - bottom
+        s_mid_w = sw - left - right
+        s_mid_h = sh - top - bottom
+
+        panel = pygame.Surface(rect.size, pygame.SRCALPHA)
+        panel.fill(fill, pygame.Rect(left, top, cw, ch))
+        if interior is not None:
+            self._tile_into(panel, interior, pygame.Rect(left, top, cw, ch))
+
+        def piece(sx: int, sy: int, pw: int, ph: int) -> pygame.Surface:
+            return source.subsurface(pygame.Rect(sx, sy, pw, ph)).copy()
+
+        # Corners (native size).
+        panel.blit(piece(0, 0, left, top), (0, 0))
+        panel.blit(piece(sw - right, 0, right, top), (rect.width - right, 0))
+        panel.blit(piece(0, sh - bottom, left, bottom), (0, rect.height - bottom))
+        panel.blit(piece(sw - right, sh - bottom, right, bottom),
+                   (rect.width - right, rect.height - bottom))
+        # Edges (stretched along one axis).
+        panel.blit(pygame.transform.smoothscale(
+            piece(left, 0, s_mid_w, top), (cw, top)), (left, 0))
+        panel.blit(pygame.transform.smoothscale(
+            piece(left, sh - bottom, s_mid_w, bottom), (cw, bottom)),
+            (left, rect.height - bottom))
+        panel.blit(pygame.transform.smoothscale(
+            piece(0, top, left, s_mid_h), (left, ch)), (0, top))
+        panel.blit(pygame.transform.smoothscale(
+            piece(sw - right, top, right, s_mid_h), (right, ch)),
+            (rect.width - right, top))
+
+        if alpha < 255:
+            panel.fill((255, 255, 255, alpha), special_flags=pygame.BLEND_RGBA_MULT)
+        surface.blit(panel, rect.topleft)
+        return True
+
     def draw_segmented_gauge(self, surface: pygame.Surface, rect: pygame.Rect,
                              color: Color, value: float, *, segments: int = 18) -> None:
         value = max(0.0, min(1.0, value))
@@ -287,6 +357,36 @@ class NeonMaterialKit:
         if min(color) > 170:
             return 'white'
         return 'blue'
+
+    def _source(self, family: str, name: str) -> pygame.Surface | None:
+        """Raw, unscaled atlas subsurface for a region, or None if unavailable.
+
+        Used by nine-slice rendering, which slices the source at native pixels
+        rather than pre-scaling the whole region."""
+        if self._atlas is None:
+            return None
+        rect = self._ATLAS_RECTS.get(family, {}).get(name)
+        if rect is None:
+            return None
+        x, y, w, h = rect
+        try:
+            return self._atlas.subsurface(pygame.Rect(x, y, w, h))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _tile_into(surface: pygame.Surface, tile: pygame.Surface,
+                   region: pygame.Rect) -> None:
+        """Repeat *tile* to cover *region* of *surface*, clipped to the region."""
+        if region.width <= 0 or region.height <= 0:
+            return
+        prev_clip = surface.get_clip()
+        surface.set_clip(region)
+        tw, th = tile.get_size()
+        for y in range(region.top, region.bottom, th):
+            for x in range(region.left, region.right, tw):
+                surface.blit(tile, (x, y))
+        surface.set_clip(prev_clip)
 
     def _asset(self, family: str, name: str,
                size: tuple[int, int]) -> pygame.Surface | None:
