@@ -11,9 +11,9 @@ from a `.mid` (+ optional audio); keyboard size classified from the MIDI range;
 OpenGL perspective renderer; demo mode when no device is connected; runs on
 Windows/macOS/Linux.
 
-Strategy, decisions, and architecture: [`ai-working-log/DESIGN.md`](ai-working-log/DESIGN.md).
-Original-codebase analysis: [`ai-working-log/REPORT.md`](ai-working-log/REPORT.md).
-Detailed per-feature design specs: [`ai-working-log/specs/`](ai-working-log/specs/).
+Strategy, decisions, and architecture: [`DESIGN.md`](DESIGN.md).
+Original-codebase analysis: [`REPORT.md`](REPORT.md).
+Detailed per-feature design specs: [`specs/`](specs/).
 
 ---
 
@@ -74,7 +74,7 @@ Remaining: combo-pop / score-tick animation · large-keyboard scrolling viewport
 (49key+) · optional GL stage background (deferred — needs a background quad behind
 the board that preserves the dark readable playfield center) · cross-platform
 verification · PyInstaller packaging. See the skin spec
-([`specs/2026-06-08-neon-arcade-ui-skin.md`](ai-working-log/specs/2026-06-08-neon-arcade-ui-skin.md))
+([`specs/2026-06-08-neon-arcade-ui-skin.md`](specs/2026-06-08-neon-arcade-ui-skin.md))
 and DESIGN.md → *Remaining / Future Work*.
 
 > **▶ Playable now:** `python mania.py` opens the **song-selection menu** over
@@ -102,10 +102,10 @@ Condensed from session history; the detailed reasoning lives in the linked specs
   twinkle.
 - **2.2 classifier.** Smallest covering size; **notes outside `[21,108]` →
   `ValueError`** (no silent 88-key fallback).
-- **2.3 chart builder** ([spec](ai-working-log/specs/2026-05-04-chart-builder-design.md)).
+- **2.3 chart builder** ([spec](specs/2026-05-04-chart-builder-design.md)).
   MIDI 1:1; **PC range → 9 lanes** by linear interpolation, half-up rounding;
   range-validate both modes.
-- **2.4 engine** ([spec](ai-working-log/specs/2026-06-02-game-engine-design.md)).
+- **2.4 engine** ([spec](specs/2026-06-02-game-engine-design.md)).
   **Injected `Clock`/`Scoring`/`DemoSource` Protocols** (engine never constructs
   deps → built/tested before them); countdown via a `dt` accumulator; **finish at
   chart tail** with cached time; engine owns input timestamps.
@@ -116,14 +116,14 @@ Condensed from session history; the detailed reasoning lives in the linked specs
   end-to-end headless against the real core.
 - **3.1 audio.** **Wall-clock authority** (not the backend's position query),
   pause-excluded, `AUDIO_OFFSET_MS`; rtmidi and mixer behind injectable backends.
-- **3.2 menu + app flow** ([spec](ai-working-log/specs/2026-06-06-song-select-design.md)).
+- **3.2 menu + app flow** ([spec](specs/2026-06-06-song-select-design.md)).
   MENU → PLAYING → RESULTS loop in one window; scan `songs/` and **skip
   unparseable folders, not fatal**; PC vs Demo modes.
-- **3.3–3.5 OpenGL renderer** ([spec](ai-working-log/specs/2026-06-07-opengl-renderer-design.md)).
+- **3.3–3.5 OpenGL renderer** ([spec](specs/2026-06-07-opengl-renderer-design.md)).
   Vanishing-point GL scene + **surface→texture HUD compositing** (retired
   `glDrawPixels`); **texture-first** atlas via a single `_textured_quad` seam for
   future FX; pure unit-tested geometry; standalone results screen.
-- **4.x MIDI input** ([spec](ai-working-log/specs/2026-06-07-midi-device-input-design.md)).
+- **4.x MIDI input** ([spec](specs/2026-06-07-midi-device-input-design.md)).
   **Frame-polling** rtmidi (not a callback thread); **span calibration by pressing
   lowest/highest** (a port can't report its key count); menu keys-mode limited to
   the measured span with per-song playability tags.
@@ -133,7 +133,7 @@ Condensed from session history; the detailed reasoning lives in the linked specs
   test). Promoted the two stray sample MIDIs into the library:
   `resources/chords.mid` → `songs/chords/` and `resources/平和な日々.mid` →
   `songs/heiwa-na-hibi/`. Kept the neon atlas.
-- **5.x neon arcade UI skin** ([spec](ai-working-log/specs/2026-06-08-neon-arcade-ui-skin.md)).
+- **5.x neon arcade UI skin** ([spec](specs/2026-06-08-neon-arcade-ui-skin.md)).
   **Atlas-first**, three-layer split: `atlas.py` stays the numeric source of truth
   (HUD-frame rects + measured `NINE_SLICE_BORDERS`); `NeonMaterialKit` gains
   low-level nine-slice panels (corners undistorted, edges stretched, **interior
