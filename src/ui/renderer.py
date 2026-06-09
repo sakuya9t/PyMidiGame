@@ -69,6 +69,18 @@ def is_black_key(note: int) -> bool:
     return note % 12 in _BLACK_KEYS
 
 
+def lane_overlay_alpha(lane_count: int) -> float:
+    """Alpha for the lane atlas texture drawn over the flat lane color.
+
+    Subtle by design, and subtler as lanes get thinner: at 49-key MIDI width a
+    busy texture would fight note readability, so it fades toward a faint wash."""
+    if lane_count <= 12:
+        return 0.22
+    if lane_count <= 25:
+        return 0.14
+    return 0.08
+
+
 def lane_family(lane: int, mode: str, midi_low: int, lane_count: int) -> str:
     """Atlas color family for a lane. In 1:1 'midi' mode each lane is a piano
     key: white keys -> 'white', black keys -> 'blue' (so the board reads like a
@@ -128,16 +140,24 @@ class Renderer:
     def _draw_lanes(self, chart: Chart) -> None:
         lane_count = chart.lane_count
         midi_low = chart.kb_class.midi_low
+        overlay_alpha = lane_overlay_alpha(lane_count)
+        overlay_tint = (1.0, 1.0, 1.0, overlay_alpha)
         for lane in range(lane_count):
             left, right = geometry.lane_bounds_world(lane, lane_count,
                                                      BOARD_LEFT, BOARD_RIGHT)
-            # Flat key colors read clearly even at 49+ thin lanes; notes and the
-            # hit bar stay textured. MIDI: white keys light, black keys blue.
-            # PC: alternate white/blue with a red center (space-bar) lane.
-            fill = _LANE_FILL[lane_family(lane, chart.mode, midi_low, lane_count)]
+            # Two passes: a flat key color for clarity, then the lane atlas
+            # texture at low alpha for arcade detail. MIDI: white keys light,
+            # black keys blue. PC: alternate white/blue, red center lane. The
+            # overlay fades on thin 49-key lanes so notes stay readable, and is
+            # skipped entirely on the flat-color (no-atlas) fallback path.
+            family = lane_family(lane, chart.mode, midi_low, lane_count)
             self._textured_quad(
                 _flat_quad(left, right, BOARD_FAR_Z, BOARD_NEAR_Z, y=0.01),
-                None, fill)
+                None, _LANE_FILL[family])
+            if self._atlas.available:
+                self._textured_quad(
+                    _flat_quad(left, right, BOARD_FAR_Z, BOARD_NEAR_Z, y=0.011),
+                    self._atlas.uv(family, 'lane'), overlay_tint)
 
         # Lane dividers (uniform; no special center lane).
         glLineWidth(1.5)

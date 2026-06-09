@@ -11,7 +11,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.ui.renderer import is_black_key, lane_family
+from src.ui.renderer import is_black_key, lane_family, lane_overlay_alpha
 
 
 class TestIsBlackKey(unittest.TestCase):
@@ -49,6 +49,28 @@ class TestLaneFamily(unittest.TestCase):
         families = [lane_family(lane, 'pc', 0, 9) for lane in range(9)
                     if lane != 4]
         self.assertEqual(set(families), {'white', 'blue'})
+
+
+class TestLaneOverlayAlpha(unittest.TestCase):
+    """The lane atlas overlay is subtle, and subtler still on thin 49-key lanes
+    so note readability beats texture density."""
+
+    def test_few_wide_lanes_get_a_visible_overlay(self):
+        self.assertGreaterEqual(lane_overlay_alpha(9), 0.2)
+
+    def test_many_thin_lanes_get_a_faint_overlay(self):
+        self.assertLessEqual(lane_overlay_alpha(49), 0.1)
+
+    def test_alpha_never_increases_with_lane_count(self):
+        counts = [4, 9, 12, 13, 25, 26, 49, 61, 88]
+        alphas = [lane_overlay_alpha(n) for n in counts]
+        for a, b in zip(alphas, alphas[1:]):
+            self.assertGreaterEqual(a, b)
+
+    def test_alpha_stays_a_subtle_wash(self):
+        for n in (1, 9, 25, 49, 88):
+            self.assertGreater(lane_overlay_alpha(n), 0.0)
+            self.assertLessEqual(lane_overlay_alpha(n), 0.3)
 
 
 if __name__ == '__main__':
