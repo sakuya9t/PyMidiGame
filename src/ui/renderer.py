@@ -100,8 +100,12 @@ class Renderer:
         self.width, self.height = size
         self._atlas = AtlasTexture()
 
-    def render(self, chart: Chart, current_ms: float) -> None:
-        """Draw the playfield for *chart* at scroll position *current_ms*."""
+    def render(self, chart: Chart, current_ms: float,
+               sparks: list[tuple[int, float]] | None = None) -> None:
+        """Draw the playfield for *chart* at scroll position *current_ms*.
+
+        *sparks* is an optional list of (lane, intensity) hit flashes from
+        ScoringEngine.recent_hits, drawn as impact blooms over the hit bar."""
         glViewport(0, 0, self.width, self.height)
         glClearColor(*_BG)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -117,6 +121,8 @@ class Renderer:
         self._draw_lanes(chart)
         self._draw_hit_bar()
         self._draw_notes(chart, current_ms)
+        if sparks:
+            self._draw_sparks(chart, sparks)
 
     # --- camera ------------------------------------------------------------
 
@@ -205,6 +211,22 @@ class Renderer:
                 self._textured_quad(verts, None, _NOTE_MISS)
             else:
                 self._textured_quad(verts, self._atlas.uv(family, 'note'), _NOTE_TINT)
+
+    def _draw_sparks(self, chart: Chart, sparks: list[tuple[int, float]]) -> None:
+        """Draw impact blooms at the hit bar for each (lane, intensity) flash."""
+        lane_count = chart.lane_count
+        midi_low = chart.kb_class.midi_low
+        lane_w = (BOARD_RIGHT - BOARD_LEFT) / lane_count
+        half = max(lane_w * 0.9, 0.4)  # thin 49-key lanes still get a visible spark
+        for lane, intensity in sparks:
+            intensity = max(0.0, min(1.0, intensity))
+            if intensity <= 0.0:
+                continue
+            cx = geometry.lane_world_x(lane, lane_count, BOARD_LEFT, BOARD_RIGHT)
+            family = lane_family(lane, chart.mode, midi_low, lane_count)
+            self._textured_quad(
+                _flat_quad(cx - half, cx + half, HIT_Z - half, HIT_Z + half, y=0.06),
+                self._atlas.uv(family, 'impact_spark'), (1.0, 1.0, 1.0, intensity))
 
     # --- primitive ---------------------------------------------------------
 

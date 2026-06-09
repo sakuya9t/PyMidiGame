@@ -32,6 +32,9 @@ PERFECT_MS = 35.0
 GREAT_MS = 75.0
 GOOD_MS = 120.0
 
+# How long a successful hit lingers as a renderer spark (ms).
+HIT_FX_WINDOW_MS = 180.0
+
 _MULTIPLIER = {
     'PERFECT': 1.0,
     'GREAT': 0.7,
@@ -61,6 +64,7 @@ class ScoringEngine:
         self._great = 0
         self._good = 0
         self._miss = 0
+        self._hit_events: list[tuple[float, int]] = []  # (time_ms, lane)
 
     def reset(self, chart: Chart) -> None:
         """Bind to a chart's notes and clear all run state.
@@ -80,6 +84,7 @@ class ScoringEngine:
         self._combo = 0
         self._max_combo = 0
         self._perfect = self._great = self._good = self._miss = 0
+        self._hit_events = []
 
     def register_hit(self, lane: int, time_ms: float) -> Judgment:
         """Resolve the nearest unresolved note in *lane* within the GOOD window.
@@ -110,6 +115,7 @@ class ScoringEngine:
         self._score += self._base * _MULTIPLIER[key]
         self._combo += 1
         self._max_combo = max(self._max_combo, self._combo)
+        self._hit_events.append((time_ms, lane))
         return judgment
 
     def tick(self, current_ms: float) -> None:
@@ -119,6 +125,26 @@ class ScoringEngine:
                 n.missed = True
                 self._miss += 1
                 self._combo = 0
+
+    def recent_hits(self, current_ms: float,
+                    window_ms: float = HIT_FX_WINDOW_MS) -> list[tuple[int, float]]:
+        """Active hit sparks as (lane, intensity) for *current_ms*.
+
+        Intensity fades from 1.0 at the moment of the hit to 0.0 at *window_ms*
+        later. Expired events are swept out as a side effect, so this is meant to
+        be called once per frame by the renderer; events newer than *current_ms*
+        (clock jitter) are retained but not emitted yet."""
+        live: list[tuple[float, int]] = []
+        sparks: list[tuple[int, float]] = []
+        for time_ms, lane in self._hit_events:
+            age = current_ms - time_ms
+            if age > window_ms:
+                continue  # faded out
+            live.append((time_ms, lane))
+            if age >= 0:
+                sparks.append((lane, 1.0 - age / window_ms))
+        self._hit_events = live
+        return sparks
 
     @property
     def score(self) -> int:

@@ -93,6 +93,14 @@ class TestGLRenderer(unittest.TestCase):
         renderer = Renderer(self.SIZE)
         renderer.render(_chart(lane_count=9), current_ms=400.0)
 
+    def test_renders_hit_sparks(self):
+        from src.ui.renderer import Renderer
+        renderer = Renderer(self.SIZE)
+        # (lane, intensity) pairs from ScoringEngine.recent_hits.
+        renderer.render(_chart(lane_count=9), current_ms=400.0,
+                        sparks=[(0, 1.0), (4, 0.6), (8, 0.2)])
+        self.assertGreater(_framebuffer_max(*self.SIZE), 120)
+
 
 if __name__ == '__main__':
     unittest.main()

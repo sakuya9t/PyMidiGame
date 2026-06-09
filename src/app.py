@@ -177,7 +177,8 @@ def run(midi_path: str, audio_path: str | None = None, *,
                     engine.resume() if engine.state.name == 'PAUSED' else engine.pause()
 
         engine.update(dt_ms)
-        renderer.render(chart, engine.current_ms())
+        now = engine.current_ms()
+        renderer.render(chart, now, sparks=scoring.recent_hits(now))
         hud.render(overlay, scoring, state=engine.state,
                    countdown=engine.countdown_value(), is_demo=engine.is_demo())
         presenter.present(overlay)
@@ -437,7 +438,9 @@ class App:
                     countdown=self._engine.countdown_value(),
                     is_demo=self._engine.is_demo())
             if self._gl:
-                self._renderer.render(self._chart, self._engine.current_ms())
+                now = self._engine.current_ms()
+                sparks = self._scoring.recent_hits(now)
+                self._renderer.render(self._chart, now, sparks=sparks)
                 self._presenter.present(self._surface)
 
     def step(self, dt_ms: float, events) -> bool:
