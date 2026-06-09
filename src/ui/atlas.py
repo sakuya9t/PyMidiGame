@@ -76,6 +76,16 @@ ATLAS_RECTS: dict[str, dict[str, tuple[int, int, int, int]]] = {
         'impact_spark': (787, 1036, 110, 102),
         'glint_tiny': (1035, 1045, 185, 80),
     },
+    # Phase 5 — results rank badges. A non-color family (no lane/note/panel
+    # members); accessed by name only, so it never participates in the
+    # color-family lookup that drives lanes/notes.
+    'rank': {
+        'rank_c': (201, 1177, 57, 60),
+        'rank_b': (266, 1177, 57, 60),
+        'rank_a': (331, 1177, 57, 60),
+        'rank_s': (394, 1177, 57, 60),
+        'rank_s_plus': (461, 1177, 58, 60),
+    },
 }
 
 # family -> name -> (left, top, right, bottom) nine-slice border widths, in

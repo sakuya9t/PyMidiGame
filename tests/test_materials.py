@@ -169,6 +169,23 @@ class OverlayHelperTest(unittest.TestCase):
                                           pygame.Rect(0, 0, 64, 64))
         self.assertFalse(ok)
 
+    def test_draw_asset_blits_known_region(self):
+        if not self.kit.using_atlas:
+            self.skipTest('atlas not available')
+        surf = pygame.Surface((200, 200), pygame.SRCALPHA)
+        rect = pygame.Rect(20, 20, 120, 120)
+        ok = self.kit.draw_asset(surf, 'rank', 'rank_s', rect)
+        self.assertTrue(ok)
+        drawn = any(surf.get_at((x, y)).a > 0
+                    for x in range(rect.left, rect.right, 4)
+                    for y in range(rect.top, rect.bottom, 4))
+        self.assertTrue(drawn)
+
+    def test_draw_asset_unknown_returns_false(self):
+        surf = pygame.Surface((200, 200), pygame.SRCALPHA)
+        ok = self.kit.draw_asset(surf, 'rank', 'rank_z', pygame.Rect(0, 0, 64, 64))
+        self.assertFalse(ok)
+
     def test_noise_tile_is_deterministic_per_seed(self):
         a = self.kit.make_noise_tile((64, 64), seed=7)
         b = self.kit.make_noise_tile((64, 64), seed=7)

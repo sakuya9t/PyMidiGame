@@ -19,8 +19,9 @@ class TestAtlasTable(unittest.TestCase):
     def test_atlas_size_matches_image(self):
         self.assertEqual(atlas.ATLAS_SIZE, (1254, 1254))
 
-    def test_has_three_color_families(self):
-        self.assertEqual(set(atlas.ATLAS_RECTS), {'blue', 'white', 'red'})
+    def test_has_three_color_families_plus_rank(self):
+        self.assertEqual(set(atlas.ATLAS_RECTS),
+                         {'blue', 'white', 'red', 'rank'})
 
     def test_blue_lane_rect_present(self):
         self.assertEqual(atlas.ATLAS_RECTS['blue']['lane'], (34, 72, 82, 498))
@@ -82,9 +83,12 @@ class TestNeonArcadeSkinRegions(unittest.TestCase):
         for family in ('blue', 'white', 'red'):
             self.assertIn('glint_tiny', atlas.ATLAS_RECTS[family])
 
-    def test_still_only_three_color_families(self):
-        # Rank badges (a 4th family) are deferred to the results-polish pass.
-        self.assertEqual(set(atlas.ATLAS_RECTS), {'blue', 'white', 'red'})
+    def test_rank_badges_registered(self):
+        for name in ('rank_c', 'rank_b', 'rank_a', 'rank_s', 'rank_s_plus'):
+            self.assertIn(name, atlas.ATLAS_RECTS['rank'])
+
+    def test_rank_s_rect(self):
+        self.assertEqual(atlas.ATLAS_RECTS['rank']['rank_s'], (394, 1177, 57, 60))
 
 
 class TestNineSliceBorders(unittest.TestCase):

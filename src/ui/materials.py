@@ -332,6 +332,14 @@ class NeonMaterialKit:
         surface.blit(base, rect)  # crisp foreground last
         return rect
 
+    def draw_asset(self, surface: pygame.Surface, family: str, name: str,
+                   rect: pygame.Rect, *, alpha: int = 255) -> bool:
+        """Blit an atlas region with normal alpha (e.g. rank badges, icons).
+
+        Returns False when the asset is unavailable, leaving *surface* untouched
+        so callers can fall back to drawn art."""
+        return self._blit_asset(surface, family, name, rect, alpha=alpha)
+
     def draw_additive_asset(self, surface: pygame.Surface, family: str,
                             name: str, rect: pygame.Rect, *,
                             alpha: int = 255) -> bool:
