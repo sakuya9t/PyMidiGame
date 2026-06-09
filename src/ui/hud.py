@@ -11,10 +11,21 @@ renderer; this module owns only the flat overlay.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pygame
 
 from src.game.engine import GameState
 from src.ui.skin import NeonArcadeSkin
+
+
+@dataclass(frozen=True)
+class SongInfo:
+    """Metadata shown on the HUD song panel for the current run."""
+    title: str
+    artist: str | None = None
+    bpm: float | int | None = None
+    jacket: pygame.Surface | None = None
 
 # Colors used by the countdown / results overlays.
 _TEXT = (235, 245, 255)
@@ -45,6 +56,17 @@ class HudOverlay:
         self._mid = pygame.font.SysFont('consolas,menlo,monospace', 48)
         self._skin = NeonArcadeSkin()
         self._layout = self._build_layout(size)
+        self._song: SongInfo | None = None
+
+    @property
+    def song(self) -> SongInfo | None:
+        return self._song
+
+    def set_song(self, title: str, *, artist: str | None = None,
+                 bpm: float | int | None = None,
+                 jacket: pygame.Surface | None = None) -> None:
+        """Set the current song's metadata for the HUD song panel."""
+        self._song = SongInfo(title=title, artist=artist, bpm=bpm, jacket=jacket)
 
     def render(self, target: pygame.Surface, scoring, *, state: GameState,
                countdown: int = 0, is_demo: bool = False) -> None:
@@ -61,9 +83,13 @@ class HudOverlay:
 
     def _draw_hud(self, target: pygame.Surface, scoring, is_demo: bool) -> None:
         song, gauge, stat, score, combo = self._layout
-        # Song metadata isn't plumbed through yet (first pass): show a stable
-        # title and the placeholder jacket. Wiring real metadata is a follow-up.
-        self._skin.draw_song_panel(target, song, title='MIDIMANIA')
+        info = self._song
+        self._skin.draw_song_panel(
+            target, song,
+            title=info.title if info else 'MIDIMANIA',
+            artist=info.artist if info else None,
+            bpm=info.bpm if info else None,
+            jacket=info.jacket if info else None)
         self._skin.draw_gauge_panel(target, gauge, value=scoring.accuracy,
                                     label='ACCURACY')
         self._skin.draw_small_stat_box(

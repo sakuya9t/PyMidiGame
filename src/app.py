@@ -31,6 +31,7 @@ from src.audio.player import AudioPlayer
 from src.audio.synth import synthesize_midi_to_wav
 from src.ui.renderer import Renderer
 from src.ui.hud import HudOverlay
+from src.ui.materials import NeonMaterialKit
 from src.ui.results import ResultsScreen
 from src.ui.gl_overlay import SurfacePresenter
 from src.ui.midi_setup import (
@@ -82,6 +83,19 @@ def make_engine(chart: Chart, clock, *, demo: bool = True):
 def build_keymap(lane_count: int) -> dict[int, int]:
     """Map pygame key codes to lane indices (best-effort for up to 9 PC lanes)."""
     return {key: lane for lane, key in enumerate(PC_KEYS) if lane < lane_count}
+
+
+# Per-song cover art file names tried in the song folder, in preference order.
+JACKET_NAMES = ('jacket.png', 'cover.png')
+
+
+def _load_jacket(song_dir: str) -> pygame.Surface | None:
+    """Load a song's cover art from its folder, or None to use the placeholder."""
+    for name in JACKET_NAMES:
+        surf = NeonMaterialKit.load_optional_ui_image(os.path.join(song_dir, name))
+        if surf is not None:
+            return surf
+    return None
 
 
 # Produced-audio extensions tried when pairing with a MIDI, in preference order.
@@ -280,6 +294,8 @@ class App:
         self._engine, self._scoring = make_engine(self._chart, clock, demo=demo)
         self._keymap = build_keymap(self._chart.lane_count)
         self._selection = (entry, input_mode, keys_mode)
+        self._hud.set_song(entry.title, artist=entry.artist or None,
+                           bpm=entry.bpm, jacket=_load_jacket(entry.dir))
         self._engine.start()
         self._screen = AppScreen.PLAYING
 

@@ -131,5 +131,43 @@ class HudArcadeLayoutTest(unittest.TestCase):
                              msg=f'opaque HUD pixel leaked into {point}')
 
 
+class HudSongMetadataTest(unittest.TestCase):
+    """The song panel reflects the current song's metadata once it's wired."""
+
+    @classmethod
+    def setUpClass(cls):
+        pygame.init()
+        cls.scoring = FakeScoring()
+
+    @classmethod
+    def tearDownClass(cls):
+        pygame.quit()
+
+    def _surf(self):
+        return pygame.Surface(SIZE, pygame.SRCALPHA)
+
+    def test_song_defaults_to_none(self):
+        self.assertIsNone(HudOverlay(SIZE).song)
+
+    def test_set_song_stores_metadata(self):
+        hud = HudOverlay(SIZE)
+        hud.set_song('Moonlight', artist='Beethoven', bpm=120)
+        self.assertEqual(hud.song.title, 'Moonlight')
+        self.assertEqual(hud.song.artist, 'Beethoven')
+        self.assertEqual(hud.song.bpm, 120)
+
+    def test_set_song_changes_song_panel_pixels(self):
+        hud = HudOverlay(SIZE)
+        before = self._surf()
+        hud.render(before, self.scoring, state=GameState.PLAYING)
+        hud.set_song('A Very Different Song Title')
+        after = self._surf()
+        hud.render(after, self.scoring, state=GameState.PLAYING)
+        region = pygame.Rect(28, 24, 404, 154)
+        self.assertNotEqual(
+            pygame.image.tostring(before.subsurface(region), 'RGBA'),
+            pygame.image.tostring(after.subsurface(region), 'RGBA'))
+
+
 if __name__ == '__main__':
     unittest.main()
