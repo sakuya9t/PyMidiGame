@@ -577,11 +577,16 @@ invisible); a minimal fixture skin under `tests/fixtures/` selected via
    keybeam and press-marker press/release lifecycles (including early release
    mid-RISE, §3.5), popup expiry, deterministic particle positions, milestone
    detection, caps (§8).
-4. `Renderer._textured_quad_batch` + conversion of the note/hold loops; GL
-   smoke test extension proving a frame still renders.
+4. `Renderer._textured_quad_batch` + conversion of the note/hold loops, and
+   **note window culling** (bisect the time-sorted notes to the visible
+   window — §8.2); GL smoke test extension proving a frame still renders.
+5. Frame profiler: `MIDIMANIA_SHOW_FPS=1` overlay + `tools/profile_frame.py`
+   worst-case synthetic benchmark (§8.5).
 
 **Definition of done:** suite green headless; standalone GL tests pass; a
-capture renders pixel-identical playfield (batching is invisible).
+capture renders pixel-identical playfield (batching and culling are
+invisible); `profile_frame.py` reports the §8.2 table with real numbers and
+p95 < 12 ms on the dev machine.
 
 ### Phase 6.2 — Playfield juice (the core DJMAX feel)
 
@@ -644,10 +649,12 @@ luminance within +10% of pre-phase capture (readability guard).
 
 ### Phase 6.7 (optional, last) — True bloom post-processing
 
-FBO render-to-texture + 2-pass GLSL blur + additive recombine. Gated on a GL
-capability probe at startup; any failure → silent fallback to the direct path.
-Env escape hatch `MIDIMANIA_BLOOM=0`. This is the only phase touching shaders;
-everything before it must already look great without it.
+FBO render-to-texture + 2-pass GLSL blur + additive recombine. Shaders are
+written against GLSL 120 / GL 2.1 — the oldest, most widely supported profile
+— so macOS (GL frozen at 4.1, compatibility contexts only) stays safe (§9).
+Gated on a GL capability probe at startup; any failure → silent fallback to
+the direct path. Env escape hatch `MIDIMANIA_BLOOM=0`. This is the only phase
+touching shaders; everything before it must already look great without it.
 
 ---
 
@@ -681,7 +688,9 @@ results at four reveal stages. Compare against prior captures before merging.
 New pure modules (`anim`, `effects`) target exhaustive unit coverage — they are
 plain math.
 
-## 8. Performance budget (hard caps in code)
+## 8. Performance & resource budget
+
+### 8.1 Hard FX caps (in code)
 
 | FX | Cap | Cost ceiling |
 |---|---|---|
@@ -693,11 +702,116 @@ plain math.
 | Dust/atmosphere | 40 | 1 quad each |
 | Confetti (results) | 60 | 1 quad each |
 
-Worst case ≈ 250 FX quads + batched notes — under 20% of the 2,000-quad
-budget. `FxManager.update` drops oldest-first past caps. If a profile shows a
-frame > 12 ms on the dev machine, particle caps halve before anything else.
+Worst case ≈ 250 FX quads + visible notes ≈ 350–400 quads/frame.
+`FxManager.update` drops oldest-first past caps.
 
-## 9. Guardrails
+### 8.2 CPU load estimate (the real constraint)
+
+The bottleneck of this stack is **Python-side call overhead**, not rendering.
+Each PyOpenGL call costs ~1–2 µs of ctypes marshalling; an immediate-mode quad
+is ~11 calls (begin/end, 4 vertices, 4 texcoords, color) ≈ 12–25 µs.
+Frame budget at 60 FPS: 16.6 ms.
+
+| Per-frame work | Estimate (modest 2015+ laptop CPU) | Notes |
+|---|---|---|
+| Engine/scoring/FX state update | ~0.5 ms | closed-form math, few hundred objects |
+| Chart note loop | **2–4 ms today on dense charts** → ~0.3 ms | see culling fix below |
+| GL quad issue (≈400 quads) | 5–9 ms immediate mode → ~1 ms batched arrays | the big lever |
+| HUD pygame draw | 1–3 ms | fonts re-rendered every frame today |
+| HUD texture upload (1366×768 RGBA ≈ 4 MB) | 1–2 ms | unavoidable; one upload/frame |
+| Event pump, flip | ~0.5 ms + vsync wait | |
+
+**Found while writing this section:** `_draw_notes` iterates the *entire
+chart* every frame. A 5,000-note 88-key chart costs 2–4 ms just skipping
+off-board notes. Fix in Phase 6.1: notes are already stable-sorted by
+`time_ms`, so `bisect` the visible window `[current_ms - tail, current_ms +
+lookahead]` and iterate only that slice (~30–80 notes).
+
+Worst-case total, naive: ~10–18 ms — playable on the dev machine, **no
+headroom on weak hardware**. With the mitigation ladder: ~4–7 ms, comfortable
+60 FPS on a 2015-era dual-core with an iGPU, which we adopt as min-spec.
+
+### 8.3 Mitigation ladder (applied in this order, each is independent)
+
+1. **Note window culling** (bisect, Phase 6.1) — removes the only
+   chart-size-dependent cost. Mandatory, not optional.
+2. **Text/surface caching** (Phase 6.4) — `SysFont.render` results keyed by
+   (font, text, color); score/combo strings change at most a few times per
+   second. Cuts HUD draw to <1 ms typical.
+3. **Vertex arrays** — if profiling demands it: accumulate batch quads into a
+   numpy float32 array, one `glVertexPointer`/`glTexCoordPointer`/
+   `glDrawArrays` per atlas bind. ~10× fewer Python→GL calls (≈400 quads →
+   ~12 calls). `_textured_quad_batch` is designed so its internals can switch
+   to this without touching callers. PyOpenGL_accelerate (already a dep)
+   makes numpy paths near-C speed.
+4. **FX degradation** — halve particle caps, drop the dust layer. Last resort.
+
+### 8.4 GPU & memory
+
+GPU load is trivial and stays trivial: ≤400 textured quads at 1366×768 with
+additive overdraw is **well under 1% of any GPU shipped since ~2010**,
+integrated included. The optional 6.7 bloom (2–3 fullscreen blur passes) adds
+single-digit percent on an iGPU. Textures: atlas (≈6 MB) + baked FX sprites
+(<10 MB) + per-frame HUD texture (4 MB) — irrelevant. Audio/MIDI threads are
+unchanged. The game is, and remains, single-core CPU-bound; GPU and RAM never
+enter the picture.
+
+### 8.5 Measurement, not vibes
+
+Phase 6.1 adds a frame profiler: `MIDIMANIA_SHOW_FPS=1` draws an FPS +
+frame-time (avg/p95) overlay, and a `tools/profile_frame.py` harness renders
+a worst-case synthetic frame (dense chart + all FX caps saturated) offscreen
+and prints the per-section timing table above with real numbers. Every phase's
+DoD includes: worst-case p95 frame time < 12 ms on the dev machine. The
+engine question (§9) gets re-asked only if the ladder is exhausted and that
+bar still fails on min-spec hardware.
+
+## 9. Platform evaluation — does pygame still carry this, and when wouldn't it?
+
+Hard requirement: **Windows + macOS + Linux.** Evaluated options against it:
+
+| | Python/pygame/PyOpenGL (current) | Godot 4 | Unity |
+|---|---|---|---|
+| Win/mac/Linux | ✅ (PyInstaller per-OS) | ✅ first-class export | ✅ |
+| This spec's visuals (≤400 quads, baked glow, bloom) | ✅ with §8 ladder | ✅ trivially | ✅ trivially |
+| MIDI file parsing + live device input | ✅ today (mido + rtmidi, calibrated, tested) | ⚠️ rebuild (GDScript/C# libs, weaker) | ⚠️ rebuild (DryWetMidi; device layer DIY) |
+| 386-test headless TDD suite | ✅ today | ⚠️ partial rewrite | ❌ heavyweight test story |
+| Migration cost | — | full rewrite, weeks+ | full rewrite, weeks+ |
+| Runtime footprint / licensing | small, all-FOSS | small, MIT | large, proprietary licensing |
+
+**Verdict: stay on pygame + PyOpenGL for Phase 6.** The resource analysis
+(§8.2–8.4) shows every effect in this spec fits the current stack with
+headroom once the mitigation ladder is applied — the thing standing between
+today's visuals and DJMAX-feel is design and motion work, not engine
+horsepower. A migration would freeze feature work for a full rewrite of the
+MIDI stack, the injectable-seam architecture, and the headless test suite, to
+solve a problem we don't have.
+
+**Honest risks of the current stack, and the explicit migration triggers:**
+
+1. **macOS OpenGL deprecation** — the biggest long-term risk. Apple froze GL
+   at 4.1 and has deprecated it for years; it still ships and SDL2 uses it
+   fine today, but it could be removed in a future macOS. Containment: the
+   optional 6.7 shaders must stay GL 2.1-compatible (GLSL 120) so the whole
+   renderer remains on the oldest, most widely emulated profile; if Apple
+   ever pulls GL, ANGLE (GL-on-Metal) is the bridge. If that bridge fails,
+   *that* is a genuine migration trigger.
+2. **Scope growth beyond this spec** — video BGAs, 120/144 Hz judgment-grade
+   rendering, 4K, mobile/console: each is a real wall for Python frame
+   pacing, and any one becoming a requirement is a trigger.
+3. **Min-spec failure** — if `tools/profile_frame.py` still exceeds 16 ms on
+   min-spec after the full §8.3 ladder, that's the empirical trigger.
+
+**If a trigger fires, the target is Godot 4, not Unity**: MIT-licensed, tiny
+runtime, first-class Win/mac/Linux export, strong 2D+GL ES renderer, and
+GDScript's closeness to Python keeps the port mechanical. Unity adds
+licensing friction and engine weight this game never needs. The Phase 6
+architecture is deliberately migration-friendly either way: `anim.py`,
+`effects.py`, scoring, and the chart pipeline are pure logic with no
+pygame/GL imports — they port as algorithms, and the skin-pack manifest
+(§4.2) is engine-neutral data.
+
+## 10. Guardrails
 
 - Note/judgment **readability beats spectacle**: no effect may raise lane-area
   background luminance >10% or cover an unhit note with >40% additive alpha.
