@@ -77,6 +77,16 @@ verification · PyInstaller packaging. See the skin spec
 ([`specs/2026-06-08-neon-arcade-ui-skin.md`](specs/2026-06-08-neon-arcade-ui-skin.md))
 and DESIGN.md → *Remaining / Future Work*.
 
+### Phase 6 — DJMAX-Style Visual Experience Overhaul (planned)
+
+Designed, not yet started: a data-driven **skin pack system** (drop-in
+`resources/skins/<id>/skin.json` re-themes the game with no code change) plus a
+motion/feedback overhaul (keybeams, judgment popups, layered hit FX, animated
+combo, live stage atmosphere, HUD/menu/results animation, screen transitions,
+optional bloom) in seven shippable sub-phases. The combo-pop and
+stage-background items above fold into it. Full design:
+[`specs/2026-06-09-djmax-visual-overhaul-design.md`](specs/2026-06-09-djmax-visual-overhaul-design.md).
+
 > **▶ Playable now:** `python mania.py` opens the **song-selection menu** over
 > `songs/` in an OpenGL window (↑↓ pick · ←→ PC / Demo / MIDI · K keys-mode · M
 > MIDI setup · Enter play · Esc quit; after a song, Enter→menu, R→retry). Plug in a
